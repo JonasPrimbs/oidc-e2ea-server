@@ -3,6 +3,7 @@ name: Create and publish a Docker image to GitHub Registry
 on:
   release:
     types: ['published']
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
