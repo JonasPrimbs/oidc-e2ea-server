@@ -21,16 +21,16 @@ This section provides an introduction to the architecture and the configuration 
 The following figure shows the overall architecture how to use the provided Remote ID Token (RIDT) Endpoint with any OpenID Provider implementation.
 
 ```
-                            +---------+                +----------+
-                            |         |       *        |  OpenID  |
-                            |         |--------------->| Provider |
-   ------                   |         |                +----------+
- /        \  localhost:8080 | Reverse |
-| Internet |--------------->|  Proxy  |
- \        /                 |         |                                                    +----------+
-   ------                   |         | /realms/test/protocol/openid-connect/userinfo/ridt |   RIDT   |
-                            |         |--------------------------------------------------->| Endpoint |
-                            +---------+                                                    +----------+
+                                                       +---------+                +----------+
+   /*                                                  |         |       *        |  OpenID  |
+  ---------------------------------------------------> |         |--------------->| Provider |
+                                                       |         |                +----------+
+                                                       | Reverse |
+                                                       |  Proxy  |
+                                                       |         |                +----------+
+   /realms/test/protocol/openid-connect/userinfo/ridt  |         |       /        |   RIDT   |
+  ---------------------------------------------------> |         |--------------->| Endpoint |
+                                                       +---------+                +----------+
 ```
 
 The Docker Compose composition provided [here](./docker-compose.yaml) uses the following implementations:
