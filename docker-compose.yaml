@@ -1,0 +1,100 @@
+version: "3.9"
+
+services:
+  proxy:
+    image: traefik:v2.8
+    restart: always
+    ports:
+      - 80:80
+      - 8080:8080
+    command:
+      - "--accesslog=true"
+      - "--entrypoints.web.address=:80"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
+      - "--providers.docker.exposedbydefault=false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+  db:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_USER_FILE: /run/secrets/db_username
+      POSTGRES_DB: keycloak
+    secrets:
+      - db_username
+      - db_password
+    volumes:
+      - userdb:/var/lib/postgresql/data
+  op:
+    image: quay.io/keycloak/keycloak:18.0
+    restart: always
+    depends_on:
+      - proxy
+      - db
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.op.entrypoints=web
+      - traefik.http.routers.op.rule=Host(`op.localhost`)
+      - traefik.http.routers.op.priority=1
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL_HOST: db
+      KC_DB_URL_PORT: 5432
+      KC_DB_URL_DATABASE: keycloak
+      PROXY_ADDRESS_FORWARDING: "TRUE"
+    env_file:
+      - ./.secrets/op.env
+    command:
+      - "start-dev"
+    secrets:
+      - db_username
+      - db_password
+      - op_username
+      - op_password
+    volumes:
+      - ./keycloak/realm-export.json:/tmp/realm-export.json
+  ridt:
+    build:
+      context: ./ridt-endpoint/
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      - proxy
+      - op
+    labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.ridt.replacepathregex.regex=^/realms/test/protocol/openid-connect/userinfo/ridt(.*)
+      - traefik.http.middlewares.ridt.replacepathregex.replacement=$$1
+      - traefik.http.routers.ridt.entrypoints=web
+      - traefik.http.routers.ridt.rule=(Host(`op.localhost`) && PathPrefix(`/realms/test/protocol/openid-connect/userinfo/ridt`))
+      - traefik.http.routers.ridt.middlewares=ridt@docker
+      - traefik.http.routers.ridt.priority=2
+    environment:
+      - KEY_FILE=/var/private_key.pem
+      - ALG=RS256
+      - USERINFO=http://op:8080/realms/test/protocol/openid-connect/userinfo
+      - ISSUER=http://op.localhost/realms/test
+      - DEFAULT_TOKEN_PERIOD=3600
+      - MAX_TOKEN_PERIOD=2592000
+      - PORT=8080
+    env_file:
+      - ./.secrets/ridt.env
+    volumes:
+      - ./.secrets/private.pem:/var/private_key.pem
+
+volumes:
+  userdb:
+
+secrets:
+  db_username:
+    file: ./.secrets/db_username.txt
+  db_password:
+    file: ./.secrets/db_password.txt
+  op_username:
+    file: ./.secrets/op_username.txt
+  op_password:
+    file: ./.secrets/op_password.txt

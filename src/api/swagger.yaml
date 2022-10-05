@@ -1,0 +1,349 @@
+openapi: 3.0.3
+info:
+  title: OIDC RIDT Userinfo Endpoint
+  description: Endpoint for OpenID Connect's Remote ID Token endpoint for userinfo.
+  version: 0.2.0
+servers:
+- url: http://op.localhost/realms/test/protocol/openid-connect/userinfo/ridt
+paths:
+  /:
+    post:
+      summary: Request a new RIDT
+      description: Request a new Remote ID Token
+      operationId: genRidt
+      requestBody:
+        description: Authenticate and send request parameters for a new Remote ID
+          Token.
+        content:
+          application/jwt:
+            schema:
+              $ref: '#/components/schemas/RemoteIdTokenRequestJwt'
+        required: true
+      responses:
+        "201":
+          description: |
+            **Created**
+
+            Returns the generated Remote ID Token with additional information about it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IatResponse'
+        "401":
+          description: |
+            **Unauthorized**
+
+            Possible reasons:
+              - Access Token not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorStatus'
+              examples:
+                BearerAuthRequired:
+                  summary: bearer authentication required
+                  value:
+                    code: 401
+                    status: Unauthorized
+                    description: bearer authentication required
+        "403":
+          description: |
+            **Forbidden**
+
+            Possible reasons:
+              - Access Token not valid
+              - Proof of Possession not valid
+              - Proof of Possession not provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorStatus'
+              examples:
+                AccessTokenInvalid:
+                  summary: Access Token not valid
+                  value:
+                    code: 403
+                    status: Forbidden
+                    description: Access Token not valid
+                PopInvalid:
+                  summary: Proof of Possession not valid
+                  value:
+                    code: 403
+                    status: Forbidden
+                    description: Proof of Possession not valid
+                PopMissing:
+                  summary: Access Token not valid
+                  value:
+                    code: 403
+                    status: Forbidden
+                    description: Proof of Possession not found
+        "500":
+          description: |
+            **Internal Server Error**
+
+            Possible reasons:
+            - Connection to OpenID Provider failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorStatus'
+              examples:
+                Unknown:
+                  summary: Unknown Server Error
+                  value:
+                    code: 500
+                    status: Internal Server Error
+                    description: Unknown Server Error.
+      security:
+      - iat_auth:
+        - openid
+        - profile
+        - email
+    options:
+      summary: Options for RIDT
+      description: Return Options for the Remote ID Token Endpoint to avoid CORS errors.
+      operationId: ridtOptions
+      responses:
+        "204":
+          description: |
+            **No Content**
+          headers:
+            Allow:
+              schema:
+                type: array
+                items:
+                  type: string
+              example: ["POST", "OPTIONS"]
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+              example: "*"
+            Access-Control-Request-Method:
+              schema:
+                type: string
+              example: "POST"
+            Access-Control-Request-Headers:
+              schema:
+                type: array
+                items:
+                  type: string
+              example: ["Authorization", "Content-Type"]
+components:
+  schemas:
+    ErrorStatus:
+      required:
+      - code
+      - status
+      type: object
+      properties:
+        code:
+          type: integer
+          description: Status Code
+          format: int
+          minimum: 100
+          maximum: 599
+        status:
+          type: string
+          description: Status Text
+        description:
+          type: string
+          description: More detailed description
+      description: Information about ocurred error.
+    RemoteIdTokenRequestJwt:
+      type: string
+      description: |
+        A JSON Web Token (JWT) which MUST
+          - be signed with an asymmetric algorithm (`ES256`, `ES384`, `ES512`, `RS256`, `RS384`, or `RS512` allowed).
+          - have the type `"typ": "JWT"` in the header.
+          - contain the client's public key in the JWT header (`"jwk": <public-key>`).
+          - be issued by the client (`"iss": "<client-id>"`).
+          - have the OpenID Provider as audience (`"aud": "<op-id>"`).
+          - have the requested user's ID as subject (`"sub": "<user-id>"`).
+          - have an issued at date (`"iat": <issuance-time>`).
+          - have an expiration date (`"exp": <expiration-time>`).
+          - be valid for at most 10 minutes (`"exp"` minus `"nbf"` or `"iat"` is less or equal `600`).
+          - contain a unique nonce (`"nonce": "<random string>"`).
+          - contain the requested claims as a space delimited string (`"token_claims": "<claim-0> <claim-1>"`)
+          - be signed with the client's private key
+      format: jwt
+      example: eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6ImNYUThiZGVOZWVTd2ZMa0h6TWZBVUZySGxMWFpXdkpybW9NMnNDUEdVbmciLCJ5IjoiN0Rwd21Pb0hJbmQwUWNSRVJUS1pBQ2k5YndzYTVnR0tER3hGeG00OEdSQSJ9fQ.eyJpc3MiOiJjbGllbnQuZXhhbXBsZS5vcmciLCJzdWIiOiJqb2huLnNtaXRoQGFjY291bnRzLmV4YW1wbGUub3JnIiwiYXVkIjoiaHR0cHM6Ly9hY2NvdW50cy5leGFtcGxlLm9yZy8iLCJpYXQiOjE2NTkzNTUyMDUsIm5iZiI6MTY1OTM1NTIwNSwiZXhwIjoxNjU5MzU1MjM1LCJub25jZSI6IlZqZlU0Nlo1eWtJaG43akp6cVpvV0srcGFxNjNFS3VIIiwidG9rZW5fY2xhaW1zIjoibmFtZSBlbWFpbCBlbWFpbF92ZXJpZmllZCIsInRva2VuX2xpZmV0aW1lIjozNjAwLCJ0b2tlbl9ub25jZSI6IkJqeHEyN0ZVbEIwWEFXMmliK1pzNnM1N1JRcmNtVXhBIn0.Z6uoiakqd7MAAJkQ8Bry6SHrp0dQJyd5PWBgsu1EJMHBygDfB1pC_UDiakcaB5QO6-Ec3eYkNlztTVw_XBR0Tg
+    IatResponse:
+      required:
+      - remote_id_token
+      type: object
+      properties:
+        remote_id_token:
+          $ref: '#/components/schemas/RemoteIdToken'
+        expires_in:
+          type: integer
+          description: Number of seconds until the Remote ID Token expires.
+          format: int32
+          minimum: 0
+          maximum: 2592000
+          example: 3600
+        claims:
+          type: string
+          description: Space delimited claims provided in the Remote ID Token.
+          example: sub name email email_verified
+      example:
+        claims: sub name email email_verified
+        remote_id_token: eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCtEUE9QIiwia2lkIjoxfQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmV4YW1wbGUub3JnLyIsInN1YiI6ImpvaG4uc21pdGhAYWNjb3VudHMuZXhhbXBsZS5vcmciLCJpYXQiOjE2NTkzNTUyMDUsIm5iZiI6MTY1OTM1NTIwNSwiZXhwIjoxNjU5MzU4ODA1LCJub25jZSI6IlZqZlU0Nlo1eWtJaG43akp6cVpvV0srcGFxNjNFS3VIIiwiY25mIjp7Imp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6ImNYUThiZGVOZWVTd2ZMa0h6TWZBVUZySGxMWFpXdkpybW9NMnNDUEdVbmciLCJ5IjoiN0Rwd21Pb0hJbmQwUWNSRVJUS1pBQ2k5YndzYTVnR0tER3hGeG00OEdSQSJ9fSwibmFtZSI6IkpvaG4gU21pdGgiLCJlbWFpbCI6ImpvaG4uc21pdGhAbWFpbC5zYW1wbGUub3JnIiwiZW1haWxfdmVyaWZpZWQiOnRydWV9.TEIehA9Xzmo72QoWMTwlkHA2FzypvGq8mAnGyJLD7H3TAYodrMzJnqyTaU7N36Qij2w5-8IpoPIzahGoKC6J_w
+        expires_in: 3600
+    RemoteIdToken:
+      type: string
+      description: |
+        **Remote ID Token** as `jwt+dpop` which MUST
+          - contain a JWK Key ID of the OpenID Provider's key pair which is used for signing this token (`"kid": <key-id>`) in the JWT header
+          - be issued by the OpenID Provider (`"iss": "<op-id>"`)
+          - have an issued at date (`"iat": <issuance-time>`)
+          - have an expiration date (`"exp": <expiration-time>`)
+          - be valid for at most 24 hours (`"exp"` minus `"nbf"` or `"iss"` is less or equal `86400`)
+          - contain a unique nonce (`"nonce": "<random string>"`). If provided in the request, this MUST be the `token_nonce`.
+          - contain the client's public key as confirmation claim (`"cnf": { "jwk": <public-key> }`)
+          - contain the requested claims (e.g., `"name": "<full-name>"`, `"email": "<email-address>"`, ...), but only if they are covered by the scopes of the provided Access Token
+          - be signed with the OpenID Provider's private key
+      format: jwt+dpop
+      example: eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCtEUE9QIiwia2lkIjoxfQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmV4YW1wbGUub3JnLyIsInN1YiI6ImpvaG4uc21pdGhAYWNjb3VudHMuZXhhbXBsZS5vcmciLCJpYXQiOjE2NTkzNTUyMDUsIm5iZiI6MTY1OTM1NTIwNSwiZXhwIjoxNjU5MzU4ODA1LCJub25jZSI6IlZqZlU0Nlo1eWtJaG43akp6cVpvV0srcGFxNjNFS3VIIiwiY25mIjp7Imp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6ImNYUThiZGVOZWVTd2ZMa0h6TWZBVUZySGxMWFpXdkpybW9NMnNDUEdVbmciLCJ5IjoiN0Rwd21Pb0hJbmQwUWNSRVJUS1pBQ2k5YndzYTVnR0tER3hGeG00OEdSQSJ9fSwibmFtZSI6IkpvaG4gU21pdGgiLCJlbWFpbCI6ImpvaG4uc21pdGhAbWFpbC5zYW1wbGUub3JnIiwiZW1haWxfdmVyaWZpZWQiOnRydWV9.TEIehA9Xzmo72QoWMTwlkHA2FzypvGq8mAnGyJLD7H3TAYodrMzJnqyTaU7N36Qij2w5-8IpoPIzahGoKC6J_w
+    JwkPublicKey:
+      oneOf:
+        - $ref: '#/components/schemas/JwkEcPublicKey'
+        - $ref: '#/components/schemas/JwkRsaPublicKey'
+    JwkEcPublicKey:
+      type: object
+      required:
+        - kty
+        - crv
+        - x
+        - y
+      properties:
+        kty:
+          type: string
+          enum:
+            - "EC"
+        crv:
+          $ref: '#/components/schemas/EcCurves'
+          examples:
+            p256:
+              value: "P-256"
+            p384:
+              value: "P-384"
+            p521:
+              value: "P-521"
+        x:
+          type: string
+          format: byte
+        y:
+          type: string
+          format: byte
+    JwkRsaPublicKey:
+      type: object
+      required:
+        - kty
+        - n
+        - e
+      properties:
+        kty:
+          type: string
+          enum:
+            - "RSA"
+        n:
+          type: string
+          format: byte
+        e:
+          type: string
+          format: byte
+    AppConfiguration:
+      type: object
+      required:
+        - keyFilePath
+        - keyId
+        - signingAlgorithm
+        - userinfoEndpoint
+        - issuer
+        - defaultTokenPeriod
+        - maxTokenPeriod
+      properties:
+        keyFile:
+          type: string
+          format: uri
+        keyId:
+          type: string
+        signingAlgorithm:
+          $ref: '#/components/schemas/SigningAlgorithm'
+        userinfoEndpoint:
+          type: string
+          format: uri
+        issuer:
+          type: string
+          format: uri
+        defaultTokenPeriod:
+          type: integer
+          format: uint32
+          minimum: 0
+          maximum: 2592000
+        maxTokenPeriod:
+          type: integer
+          format: uint32
+          minimum: 0
+          maximum: 2592000
+    EcCurves:
+      type: string
+      enum:
+        - "P-256"
+        - "P-384"
+        - "P-521"
+    SigningAlgorithm:
+      oneOf:
+        - $ref: '#/components/schemas/EcSigningAlgorithm'
+        - $ref: '#/components/schemas/RsaSigningAlgorithm'
+    EcSigningAlgorithm:
+      type: string
+      enum:
+        - "ES256"
+        - "ES384"
+        - "ES512"
+    RsaSigningAlgorithm:
+      type: string
+      enum:
+        - "RS256"
+        - "RS384"
+        - "RS512"
+    KeyType:
+      type: string
+      enum:
+        - "EC"
+        - "RSA"
+  securitySchemes:
+    iat_auth:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: http://op.localhost/realms/test/protocol/openid-connect/auth
+          tokenUrl: http://op.localhost/realms/test/protocol/openid-connect/token
+          scopes:
+            openid: |
+              **General OpenID Connect authorization**
+            profile: |
+              **OpenID Connect profile information**
+
+              Authorizes access to the following profile claims:
+                - `name`
+                - `family_name`
+                - `given_name`
+                - `middle_name`
+                - `nickname`
+                - `preferred_username`
+                - `profile`
+                - `picture`
+                - `website`
+                - `gender`
+                - `birthdate`
+                - `zoneinfo`
+                - `locale`
+                - `updated_at`
+            email: |
+              **OpenID Connect email address information**
+
+              Authorizes access to the following profile claims:
+                - `email`
+                - `email_verified`
