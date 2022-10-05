@@ -30,6 +30,23 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
+var appConfig AppConfiguration
+var appPrivateKey *rsa.PrivateKey
+
+func Initialize() {
+	config, err := LoadAppConfigurationFromEnv()
+	if err != nil {
+		log.Fatal("failed to load configuration: " + err.Error())
+	}
+	appConfig = config
+
+	privateKey, err := ReadRsaPrivateKey(appConfig.KeyFilePath)
+	if err != nil {
+		log.Fatal("failed to load private key file: " + err.Error())
+	}
+	appPrivateKey = privateKey
+}
+
 func Base64ToBigInt(s string) (*big.Int, error) {
 	// Parse base64url encoded string to bytes
 	data, err := base64.RawURLEncoding.DecodeString(s)
@@ -504,18 +521,6 @@ func GenRidt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 
-	// Load configuration
-	appConfig, err := LoadAppConfigurationFromEnv()
-	if err != nil {
-		LogAndSendError(w, http.StatusInternalServerError, "internal server error", "unknown internal server error", "failed to load configuration: "+err.Error())
-		return
-	}
-	privateKey, err := ReadRsaPrivateKey(appConfig.KeyFilePath)
-	if err != nil {
-		LogAndSendError(w, http.StatusInternalServerError, "internal server error", "unknown internal server error", "failed to load private key file: "+err.Error())
-		return
-	}
-
 	// Get bearer token from authorization header
 	bearerToken, err := BearerTokenFromAuthorizationHeader(r)
 	if err != nil {
@@ -549,7 +554,7 @@ func GenRidt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate remote id token
-	ridt, identityClaims, expiresAt, err := GenerateRidt(privateKey, appConfig.SigningAlgorithm, popClaims, publicKeyJwk, userinfoClaims, appConfig)
+	ridt, identityClaims, expiresAt, err := GenerateRidt(appPrivateKey, appConfig.SigningAlgorithm, popClaims, publicKeyJwk, userinfoClaims, appConfig)
 	if err != nil {
 		LogAndSendError(w, http.StatusInternalServerError, "internal server error", "unknown internal server error", "failed to generate remote id token: "+err.Error())
 		return

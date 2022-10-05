@@ -18,7 +18,10 @@ import (
 
 func main() {
 	log.Printf("Starting Server...")
+
+	// Load configuration
 	log.Printf("Loading configuration...")
+	ridt.Initialize()
 
 	router := ridt.NewRouter()
 
