@@ -1,4 +1,4 @@
-name: Create and publish a Docker image to GitHub Container Registry
+name: CI GitHub Container Registry image
 
 on:
   release:

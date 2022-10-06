@@ -1,4 +1,4 @@
-name: Create and publish a Docker image to DockerHub Registry
+name: CI DockerHub Registry image
 
 on:
   release:
