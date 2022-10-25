@@ -26,8 +26,7 @@ function generate_secret {
 [ ! -f "$DB_PASSWORD_FILE" ] && generate_secret "$DB_PASSWORD_FILE" 64
 
 # Write DB username + password to op.env file
-echo "KC_DB_USERNAME=$(cat $DB_USERNAME_FILE)" > "$OP_ENV_FILE"
-echo "KC_DB_PASSWORD=$(cat $DB_PASSWORD_FILE)" >> "$OP_ENV_FILE"
+[ ! -f "$OP_ENV_FILE" ] && echo "KC_DB_USERNAME=$(cat $DB_USERNAME_FILE)" > "$OP_ENV_FILE" && echo "KC_DB_PASSWORD=$(cat $DB_PASSWORD_FILE)" >> "$OP_ENV_FILE"
 
 # Create OP username secret file if not exists
 [ ! -f "$OP_USERNAME_FILE" ] && generate_secret "$OP_USERNAME_FILE" 14
