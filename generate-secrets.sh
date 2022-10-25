@@ -36,3 +36,5 @@ echo "KC_DB_PASSWORD=$(cat $DB_PASSWORD_FILE)" >> "$OP_ENV_FILE"
 [ ! -f "$OP_PASSWORD_FILE" ] && generate_secret "$OP_PASSWORD_FILE" 64
 
 [ ! -f "$RIDT_ENV_FILE" ] && echo "KID=" > "$RIDT_ENV_FILE"
+
+echo "OP_HOST=op.localhost" > ".env"
