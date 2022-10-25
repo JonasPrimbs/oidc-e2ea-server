@@ -62,7 +62,7 @@ services:
     # image: jonasprimbs/oidc-e2ea-server:latest
     build:
       context: ./
-      dockerfile: dockerfile
+      dockerfile: Dockerfile
     restart: always
     depends_on:
       - proxy
