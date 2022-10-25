@@ -16,3 +16,5 @@
 
 .secrets
 go.sum
+
+.env
