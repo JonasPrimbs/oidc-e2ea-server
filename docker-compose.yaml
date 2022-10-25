@@ -59,10 +59,10 @@ services:
     volumes:
       - ./keycloak/realm-export.json:/tmp/realm-export.json
   ridt:
-    image: jonasprimbs/oidc-e2ea-server:latest
-    # build:
-    #   context: ./
-    #   dockerfile: dockerfile
+    # image: jonasprimbs/oidc-e2ea-server:latest
+    build:
+      context: ./
+      dockerfile: dockerfile
     restart: always
     depends_on:
       - proxy
