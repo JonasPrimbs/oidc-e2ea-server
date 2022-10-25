@@ -15,13 +15,14 @@ services:
       - "--providers.docker.endpoint=unix:///var/run/docker.sock"
       - "--providers.docker.exposedbydefault=false"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock:ro
   db:
-    image: postgres:14-alpine
+    image: postgres:15-alpine
+    restart: always
     environment:
-      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
-      POSTGRES_USER_FILE: /run/secrets/db_username
       POSTGRES_DB: keycloak
+      POSTGRES_USER_FILE: /run/secrets/db_username
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
     secrets:
       - db_username
       - db_password
