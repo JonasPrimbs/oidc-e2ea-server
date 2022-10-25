@@ -165,6 +165,20 @@ PORT=8080
 ```
 
 
+#### Database File
+
+The SQLite database file to store used nonce values in.
+
+Default Value (standalone): `./db.sqlite`
+<br>
+Default Value (Docker image): `/config/db.sqlite`
+
+Example:
+```bash
+DB_SQLITE_FILE="/config/db.sqlite"
+```
+
+
 ### REST Endpoint
 
 The REST API is described in the OpenAPI format provided [here](./docs/openapi.yaml).

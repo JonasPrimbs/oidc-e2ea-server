@@ -13,6 +13,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"database/sql"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -23,28 +24,87 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var appConfig AppConfiguration
 var appPrivateKey *rsa.PrivateKey
+var appDb *sql.DB
 
 func Initialize() {
+	// Load configuration
 	config, err := LoadAppConfigurationFromEnv()
 	if err != nil {
 		log.Fatal("failed to load configuration: " + err.Error())
 	}
 	appConfig = config
 
+	// Load private key
 	privateKey, err := ReadRsaPrivateKey(appConfig.KeyFilePath)
 	if err != nil {
 		log.Fatal("failed to load private key file: " + err.Error())
 	}
 	appPrivateKey = privateKey
+
+	// Load database
+	dbFile := os.Getenv("DB_SQLITE_FILE")
+	if dbFile == "" {
+		dbFile = "./db.sqlite"
+	}
+	db, err := loadDatabase(dbFile)
+	if err != nil {
+		log.Fatal("Failed to load database: " + err.Error())
+	}
+	appDb = db
+}
+
+func loadDatabase(dbFile string) (*sql.DB, error) {
+	// Create new database file if not exists.
+	if _, err := os.Stat(dbFile); os.IsNotExist(err) {
+		log.Print("Database file '" + dbFile + "' not found, creating new ...")
+		dbDirectory := filepath.Dir(dbFile)
+		if _, err = os.Stat(dbDirectory); os.IsNotExist(err) {
+			log.Print("Database file directory '" + dbDirectory + "' not found, creating new ...")
+			err := os.Mkdir(dbDirectory, 0700)
+			if err != nil {
+				return nil, errors.New("Failed to create new database file directory: " + err.Error())
+			}
+		}
+		file, err := os.Create(dbFile)
+		if err != nil {
+			return nil, errors.New("Failed to create new database file: " + err.Error())
+		}
+		file.Close()
+		log.Print("Database file '" + dbFile + "' created")
+	}
+
+	// Open database file.
+	log.Print("Open database file '" + dbFile + "' ...")
+	db, err := sql.Open("sqlite3", dbFile)
+	if err != nil {
+		return nil, errors.New("Failed to open database: " + err.Error())
+	}
+
+	// Create nonces table.
+	log.Print("Preparing database ...")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS nonces (nonce TEXT NOT NULL PRIMARY KEY, expires datetime);")
+	if err != nil {
+		return nil, errors.New("Failed to prepare database: Failed to create table 'nonces': " + err.Error())
+	}
+
+	// Clear old values from nonces table.
+	_, err = db.Exec("DELETE FROM nonces WHERE expires <= datetime('now');")
+	if err != nil {
+		return nil, errors.New("Failed to prepare database: Failed to delete old nonces: " + err.Error())
+	}
+
+	return db, nil
 }
 
 func Base64ToBigInt(s string) (*big.Int, error) {
@@ -396,7 +456,7 @@ func ParseProofOfPossessionFromRequestBody(r *http.Request) (*jwt.Token, jwt.Map
 	return token, claims, publicKeyJwk, nil
 }
 
-func ValidateProofOfPossession(popToken *jwt.Token, popClaims jwt.MapClaims, userinfoClaims map[string]interface{}, config AppConfiguration, now int64) error {
+func ValidateProofOfPossession(popToken *jwt.Token, popClaims jwt.MapClaims, userinfoClaims map[string]interface{}, config AppConfiguration, now time.Time) error {
 	// Validate proof of possession token
 	if !popToken.Valid {
 		return errors.New("proof of possession token is not valid")
@@ -421,10 +481,37 @@ func ValidateProofOfPossession(popToken *jwt.Token, popClaims jwt.MapClaims, use
 		return errors.New("invalid audience claim in proof of possession token")
 	}
 
+	// Verify nonce validity
+	nonce, err := StringFromJson(popClaims, "nonce")
+	if err != nil {
+		return errors.New("nonce claim in proof of possession token not found")
+	}
+	rows, err := appDb.Query("SELECT expires FROM nonces WHERE nonce = ?", nonce)
+	if err != nil {
+		return errors.New("failed to verify nonce: database error: " + err.Error())
+	}
+	if rows.Next() {
+		var expiryDate time.Time
+		rows.Scan(&expiryDate)
+		rows.Close()
+		return errors.New("invalid proof of possession token: token already used, expires at " + expiryDate.String())
+	}
+	rows.Close()
+	expUnixInt, err := Int64FromJson(popClaims, "exp")
+	if err != nil {
+		return errors.New("expiration claim not found in proof of possession token or invalid data type: " + err.Error())
+	}
+	exp := time.Unix(expUnixInt, 0)
+	_, err = appDb.Query("INSERT INTO nonces (nonce, expires) VALUES (?, ?)", nonce, exp)
+	if err != nil {
+		return errors.New("failed to insert nonce '" + nonce + "' with expiration date '" + exp.String() + ": " + err.Error())
+	}
+
 	// Verify expiration
-	if !popClaims.VerifyExpiresAt(now, true) ||
-		!popClaims.VerifyNotBefore(now, false) ||
-		!popClaims.VerifyIssuedAt(now, true) {
+	nowUnix := now.Unix()
+	if !popClaims.VerifyExpiresAt(nowUnix, true) ||
+		!popClaims.VerifyNotBefore(nowUnix, false) ||
+		!popClaims.VerifyIssuedAt(nowUnix, true) {
 		return errors.New("token expired or is not yet valid")
 	}
 
@@ -547,7 +634,7 @@ func GenRidt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate proof of possession
-	err = ValidateProofOfPossession(popToken, popClaims, userinfoClaims, appConfig, time.Now().Unix())
+	err = ValidateProofOfPossession(popToken, popClaims, userinfoClaims, appConfig, time.Now())
 	if err != nil {
 		LogAndSendError(w, http.StatusForbidden, "forbidden", "invalid proof of possession", "failed to validate proof of possession: "+err.Error())
 		return

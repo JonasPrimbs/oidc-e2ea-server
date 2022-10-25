@@ -4,7 +4,40 @@ import (
 	"errors"
 	"math/big"
 	"reflect"
+	"strconv"
 )
+
+func Int64FromJson(json map[string]interface{}, attributeName string) (int64, error) {
+	// Get attribute from json object
+	attributeInterface, ok := json[attributeName]
+	if !ok {
+		return 0, errors.New("attribute '" + attributeName + "' not found")
+	}
+
+	// Ensure that attribute value is of type string
+	switch attributeType := attributeInterface.(type) {
+	case string:
+		valueInt, err := strconv.ParseInt(attributeInterface.(string), 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return valueInt, nil
+	case int:
+		return int64(attributeInterface.(int)), nil
+	case int16:
+		return int64(attributeInterface.(int16)), nil
+	case int32:
+		return int64(attributeInterface.(int32)), nil
+	case int64:
+		return attributeInterface.(int64), nil
+	case float32:
+		return int64(attributeInterface.(float32)), nil
+	case float64:
+		return int64(attributeInterface.(float64)), nil
+	default:
+		return 0, errors.New("attribute '" + attributeName + "' is of type '" + reflect.TypeOf(attributeType).Name() + "' but expected type 'string'")
+	}
+}
 
 func StringFromJson(json map[string]interface{}, attributeName string) (string, error) {
 	// Get attribute from json object
