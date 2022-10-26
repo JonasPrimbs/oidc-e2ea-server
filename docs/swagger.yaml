@@ -4,7 +4,7 @@ info:
   description: Endpoint for OpenID Connect's Remote ID Token endpoint for userinfo.
   version: 0.2.0
 servers:
-- url: http://op.localhost/realms/test/protocol/openid-connect/userinfo/ridt
+- url: http://op.oidc-e2e.primbs.dev/realms/test/protocol/openid-connect/userinfo/ridt
 paths:
   /:
     post:
