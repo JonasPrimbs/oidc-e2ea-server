@@ -69,17 +69,17 @@ services:
       - op
     labels:
       - traefik.enable=true
-      - traefik.http.middlewares.ridt.replacepathregex.regex=^/realms/test/protocol/openid-connect/userinfo/ridt(.*)
+      - traefik.http.middlewares.ridt.replacepathregex.regex=^/realms/${REALM_NAME}/protocol/openid-connect/userinfo/ridt(.*)
       - traefik.http.middlewares.ridt.replacepathregex.replacement=$$1
       - traefik.http.routers.ridt.entrypoints=web
-      - traefik.http.routers.ridt.rule=(Host(`${OP_HOST}`) && PathPrefix(`/realms/test/protocol/openid-connect/userinfo/ridt`))
+      - traefik.http.routers.ridt.rule=(Host(`${OP_HOST}`) && PathPrefix(`/realms/${REALM_NAME}/protocol/openid-connect/userinfo/ridt`))
       - traefik.http.routers.ridt.middlewares=ridt@docker
       - traefik.http.routers.ridt.priority=2
     environment:
       - KEY_FILE=/var/private_key.pem
       - ALG=RS256
-      - USERINFO=http://op:8080/realms/test/protocol/openid-connect/userinfo
-      - ISSUER=http://op.localhost/realms/test
+      - USERINFO=http://op:8080/realms/${REALM_NAME}/protocol/openid-connect/userinfo
+      - ISSUER=http://op.localhost/realms/${REALM_NAME}
       - DEFAULT_TOKEN_PERIOD=3600
       - MAX_TOKEN_PERIOD=2592000
       - PORT=8080

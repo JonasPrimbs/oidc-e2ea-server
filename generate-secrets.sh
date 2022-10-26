@@ -37,3 +37,4 @@ function generate_secret {
 [ ! -f "$RIDT_ENV_FILE" ] && echo "KID=" > "$RIDT_ENV_FILE"
 
 echo "OP_HOST=op.localhost" > ".env"
+echo "REALM_NAME=ridt" >> ".env"
