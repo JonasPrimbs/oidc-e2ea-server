@@ -4,7 +4,7 @@ info:
   description: Endpoint for OpenID Connect's Remote ID Token endpoint for userinfo.
   version: 0.2.0
 servers:
-- url: http://op.oidc-e2e.primbs.dev/realms/test/protocol/openid-connect/userinfo/ridt
+- url: https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/userinfo/ridt
 paths:
   /:
     post:
@@ -318,8 +318,8 @@ components:
       type: oauth2
       flows:
         authorizationCode:
-          authorizationUrl: http://op.localhost/realms/test/protocol/openid-connect/auth
-          tokenUrl: http://op.localhost/realms/test/protocol/openid-connect/token
+          authorizationUrl: https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/auth
+          tokenUrl: https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/token
           scopes:
             openid: |
               **General OpenID Connect authorization**
