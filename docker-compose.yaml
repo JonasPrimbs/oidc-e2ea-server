@@ -1,111 +1,113 @@
+# Specify Docker-Compose version:
 version: "3.9"
 
+# Shared Docker Services:
 services:
+  # Reverse Proxy (Traefik):
   proxy:
-    image: traefik:v2.9
-    restart: always
+    image: traefik:v2.9                                           # Use Traefik reverse proxy
+    restart: unless-stopped                                       # Restore last on/off state after restart
     ports:
-      - 80:80
-      - 443:443
+      - 80:80                                                     # Open port 80 (HTTP)
     command:
-      - "--accesslog=true"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--providers.docker=true"
-      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
-      - "--providers.docker.exposedbydefault=false"
-      - "--certificatesresolvers.letsencrypt.acme.email=jonas@primbs.is.it"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/config/acme/acme.json"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--accesslog=true"                                        # Log access for debugging
+      - "--entrypoints.web.address=:80"                           # Use port 80 as entypoint 'web'
+      - "--providers.docker=true"                                 # Enable Docker provider to handle requests to services
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock" # Path to docker socket to listen to new services
+      - "--providers.docker.exposedbydefault=false"               # Do not expose every service by default
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - proxy_acme:/config/acme
+      - /var/run/docker.sock:/var/run/docker.sock:ro              # Mount host's docker socket read-only
+  # Keycloak Database (PostgreSQL):
   db:
-    image: postgres:15-alpine
-    restart: always
+    image: postgres:15-alpine                                     # Use PostgreSQL on Alpine Linux as database for Keycloak
+    restart: unless-stopped                                       # Restore last on/off state after restart
     environment:
-      POSTGRES_DB: keycloak
-      POSTGRES_USER_FILE: /run/secrets/db_username
-      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_DB: keycloak                                       # Name database 'keycloak'
+      POSTGRES_USER_FILE: /run/secrets/db_username                # Set database username to Docker Secret 'db_username'
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password            # Set database password to Docker Secret 'db_password'
     secrets:
-      - db_username
-      - db_password
+      - db_username                                               # Use shared Docker Secret 'db_username'
+      - db_password                                               # Use shared Docker Secret 'db_password'
     volumes:
-      - userdb:/var/lib/postgresql/data
+      - userdb:/var/lib/postgresql/data                           # Mount PostgreSQL data to shared Docker Volume 'userdb'
+  # OpenID Provider (Keycloak):
   op:
-    image: quay.io/keycloak/keycloak:18.0
-    restart: always
+    image: quay.io/keycloak/keycloak:18.0                         # Use Keycloak as OpenID Provider
+    restart: unless-stopped                                       # Restore last on/off state after restart
     depends_on:
-      - proxy
-      - db
+      - proxy                                                     # Keycloak requires running reverse proxy
+      - db                                                        # Keycloak requires running database
     labels:
-      - traefik.enable=true
-      - traefik.http.routers.op.entrypoints=web,websecure
-      - traefik.http.routers.op.rule=Host(`${OP_HOST}`)
-      - traefik.http.routers.op.priority=1
-      - traefik.http.routers.op.tls=true
-      - traefik.http.routers.op.tls.certresolver=letsencrypt
+      - traefik.enable=true                                       # Enable Traefik reverse proxy exposure
+      - traefik.http.routers.op.entrypoints=web                   # Enable exposure via HTTP entrypoint 'web'
+      - traefik.http.routers.op.rule=Host(`${OP_HOST}`)           # Specify routing via hostname provided in environment variable 'OP_HOST'
+      - traefik.http.routers.op.priority=1                        # Set priority low (traefik.http.routers.ridt.priority must be higher)
     environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
-      KC_DB: postgres
-      KC_DB_URL_HOST: db
-      KC_DB_URL_PORT: 5432
-      KC_DB_URL_DATABASE: keycloak
-      PROXY_ADDRESS_FORWARDING: "TRUE"
+      KC_DB: postgres                                             # Use a PostgreSQL database
+      KC_DB_URL_HOST: db                                          # Specify hostname of PostgreSQL database ('db' = name of Keycloak Database service)
+      KC_DB_URL_PORT: 5432                                        # Specify port of PostgreSQL database (default: 5432)
+      KC_DB_URL_DATABASE: keycloak                                # Specify name of PostgreSQL database (must be same as POSTGRES_DB of Keycloak Database service)
+      PROXY_ADDRESS_FORWARDING: TRUE                              # Configure Keycloak to run behind a reverse proxy
     env_file:
-      - ./.secrets/op.env
+      - ./.secrets/op.env                                         # Include secrets from generated environment variables
     command:
-      - "start-dev"
+      - "start-dev"                                               # Run Keycloak in development mode
     secrets:
-      - db_username
-      - db_password
-      - op_username
-      - op_password
-    volumes:
-      - ./keycloak/realm-export.json:/tmp/realm-export.json
+      - db_username                                               # Use shared Docker Secret 'db_username'
+      - db_password                                               # Use shared Docker Secret 'db_password'
+  # RIDT endpoint (this Go application):
   ridt:
-    # image: jonasprimbs/oidc-e2ea-server:latest
+    # For production:
+    #image: jonasprimbs/oidc-e2ea-server:latest                    # Use latest image from Docker Hub
+
+    # For development:
     build:
-      context: ./
-      dockerfile: Dockerfile
-    restart: always
+      context: ./                                                 # Use this repository directory as context
+      dockerfile: Dockerfile                                      # Use 'Dockerfile' from context directory
+
+    # For both:
+    restart: unless-stopped                                       # Restore last on/off state after restart
     depends_on:
-      - proxy
-      - op
+      - proxy                                                     # RIDT endpoint requires running reverse proxy
+      - op                                                        # RIDT endpoint requires running OpenID Provider
     labels:
-      - traefik.enable=true
-      - traefik.http.middlewares.ridt.replacepathregex.regex=^/realms/${REALM_NAME}/protocol/openid-connect/userinfo/ridt(.*)
-      - traefik.http.middlewares.ridt.replacepathregex.replacement=$$1
-      - traefik.http.routers.ridt.entrypoints=web,websecure
-      - traefik.http.routers.ridt.rule=(Host(`${OP_HOST}`) && PathPrefix(`/realms/${REALM_NAME}/protocol/openid-connect/userinfo/ridt`))
-      - traefik.http.routers.ridt.middlewares=ridt@docker
-      - traefik.http.routers.ridt.priority=2
-      - traefik.http.routers.op.tls=true
-      - traefik.http.routers.op.tls.certresolver=letsencrypt
+      - traefik.enable=true                                       # Enable Traefik reverse proxy exposure
+      - traefik.http.routers.ridt.entrypoints=web                 # Enable exposure via HTTP entrypoint 'web'
+      - |                                                         # Specify routing via hostname provided in environment variable 'OP_HOST' and append it to userinfo endpoint
+        traefik.http.routers.ridt.rule=(
+          Host(`${OP_HOST}`) &&
+          PathPrefix(`/realms/${REALM_NAME}/protocol/openid-connect/userinfo/ridt`)
+        )
+      - traefik.http.routers.ridt.priority=2                      # Set priority high (traefik.http.routers.op.priority must be lower)
+      - traefik.http.routers.ridt.middlewares=ridt@docker         # Include 'ridt' middleware from Docker labels below 
+      - |                                                         # Remove .../userinfo/ridt path from request
+        traefik.http.middlewares.ridt.replacepathregex.regex=
+          ^/realms/${REALM_NAME}/protocol/openid-connect/userinfo/ridt(.*)
+      - |                                                         # Forward only path after .../userinfo/ridt (marked with '(.*)') in request to RIDT endpoint
+        traefik.http.middlewares.ridt.replacepathregex.replacement=$$1
     environment:
-      - KEY_FILE=/var/private_key.pem
-      - ALG=RS256
-      - USERINFO=http://op:8080/realms/${REALM_NAME}/protocol/openid-connect/userinfo
-      - ISSUER=http://op.localhost/realms/${REALM_NAME}
-      - DEFAULT_TOKEN_PERIOD=3600
-      - MAX_TOKEN_PERIOD=2592000
-      - PORT=8080
+      KEY_FILE: /run/secrets/private_key                          # Set private key file to Docker Secret 'private_key'
+      ALG: RS256                                                  # Configure RSA with SHA256 (RS256) as signature algorithm for Remote ID Tokens
+      USERINFO: |                                                 # Configure userinfo endpoint ('op' is the Docker-internal hostname of OpenID Provider service)
+        http://op:8080/realms/${REALM_NAME}/protocol/openid-connect/userinfo
+      ISSUER: http://op.localhost/realms/${REALM_NAME}            # Configure issuer of issued Remote ID Tokens
+      DEFAULT_TOKEN_PERIOD: 3600                                  # Configure the default lifetime of issued Remote ID Tokens in seconds (3600s = 1h)
+      MAX_TOKEN_PERIOD: 2592000                                   # Configure the maximum lifetime of issued Remote ID Tokens in seconds (2592000s = 30d)
+      PORT: 8080                                                  # Configure the internal port on which the RIDT endpoint is listening
     env_file:
-      - ./.secrets/ridt.env
-    volumes:
-      - ./.secrets/private.pem:/var/private_key.pem
+      - ./.secrets/ridt.env                                       # Include secrets from generated environment variables
+    secrets:
+      - private_key                                               # Use shared Docker Secret 'private_key'
 
+# Shared Docker Volumes:
 volumes:
-  userdb:
-  proxy_acme:
+  userdb:                                                         # Specify shared volume 'userdb'
 
+# Shared Docker Secrets:
 secrets:
-  db_username:
-    file: ./.secrets/db_username.txt
-  db_password:
-    file: ./.secrets/db_password.txt
-  op_username:
-    file: ./.secrets/op_username.txt
-  op_password:
-    file: ./.secrets/op_password.txt
+  db_username:                                                    # Specify shared Docker Secret 'db_username'
+    file: ./.secrets/db_username.txt                              # Use generated database username
+  db_password:                                                    # Specify shared Docker Secret 'db_password'
+    file: ./.secrets/db_password.txt                              # Use generated database password
+  private_key:                                                    # Specify shared Docker Secret 'private_key'
+    file: ./.secrets/private.pem                                  # Use generated private key
