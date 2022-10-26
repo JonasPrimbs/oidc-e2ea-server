@@ -6,16 +6,20 @@ services:
     restart: always
     ports:
       - 80:80
-      - 8080:8080
+      - 443:443
     command:
       - "--accesslog=true"
       - "--entrypoints.web.address=:80"
-      - "--api.insecure=true"
+      - "--entrypoints.websecure.address=:443"
       - "--providers.docker=true"
       - "--providers.docker.endpoint=unix:///var/run/docker.sock"
       - "--providers.docker.exposedbydefault=false"
+      - "--certificatesresolvers.letsencrypt.acme.email=jonas@primbs.is.it"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/config/acme/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - proxy_acme:/config/acme
   db:
     image: postgres:15-alpine
     restart: always
@@ -36,9 +40,11 @@ services:
       - db
     labels:
       - traefik.enable=true
-      - traefik.http.routers.op.entrypoints=web
+      - traefik.http.routers.op.entrypoints=web,websecure
       - traefik.http.routers.op.rule=Host(`${OP_HOST}`)
       - traefik.http.routers.op.priority=1
+      - traefik.http.routers.op.tls=true
+      - traefik.http.routers.op.tls.certresolver=letsencrypt
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
@@ -71,10 +77,12 @@ services:
       - traefik.enable=true
       - traefik.http.middlewares.ridt.replacepathregex.regex=^/realms/${REALM_NAME}/protocol/openid-connect/userinfo/ridt(.*)
       - traefik.http.middlewares.ridt.replacepathregex.replacement=$$1
-      - traefik.http.routers.ridt.entrypoints=web
+      - traefik.http.routers.ridt.entrypoints=web,websecure
       - traefik.http.routers.ridt.rule=(Host(`${OP_HOST}`) && PathPrefix(`/realms/${REALM_NAME}/protocol/openid-connect/userinfo/ridt`))
       - traefik.http.routers.ridt.middlewares=ridt@docker
       - traefik.http.routers.ridt.priority=2
+      - traefik.http.routers.op.tls=true
+      - traefik.http.routers.op.tls.certresolver=letsencrypt
     environment:
       - KEY_FILE=/var/private_key.pem
       - ALG=RS256
@@ -90,6 +98,7 @@ services:
 
 volumes:
   userdb:
+  proxy_acme:
 
 secrets:
   db_username:
