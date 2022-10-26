@@ -21,6 +21,9 @@
             SwaggerUIBundle.plugins.DownloadUrl
           ],
         });
+        ui.initOAuth({
+          clientId: 'swagger',
+        });
         window.ui = ui;
       }
     </script>
