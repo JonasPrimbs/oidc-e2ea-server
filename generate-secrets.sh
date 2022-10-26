@@ -28,12 +28,6 @@ function generate_secret {
 # Write DB username + password to op.env file
 [ ! -f "$OP_ENV_FILE" ] && echo "KC_DB_USERNAME=$(cat $DB_USERNAME_FILE)" > "$OP_ENV_FILE" && echo "KC_DB_PASSWORD=$(cat $DB_PASSWORD_FILE)" >> "$OP_ENV_FILE"
 
-# Create OP username secret file if not exists
-[ ! -f "$OP_USERNAME_FILE" ] && generate_secret "$OP_USERNAME_FILE" 14
-
-# Create OP password secret file if not exists
-[ ! -f "$OP_PASSWORD_FILE" ] && generate_secret "$OP_PASSWORD_FILE" 64
-
 [ ! -f "$RIDT_ENV_FILE" ] && echo "KID=" > "$RIDT_ENV_FILE"
 
 echo "OP_HOST=op.localhost" > ".env"
