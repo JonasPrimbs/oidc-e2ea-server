@@ -464,10 +464,26 @@ Therefore, you must authorize the API documentation as follows:
 
 Now you can perform requests to the server as follows:
 
-1. Open the *POST /* Endpoint.
-2. Click *Try it out*.
-3. Paste a sufficient Token Request JWT to the *Request Body*.
-4. Click *Execute* to send the request.
+<details>
+  <summary><b>For Public Authorization Server</b></summary>
+
+  1. Make sure that the server starting with URL `https://op.oidc-e2e.primbs.dev/...` is selected.
+  2. Open the *POST /* Endpoint.
+  3. Click *Try it out*.
+  4. Paste a sufficient Token Request JWT to the *Request Body*.
+  5. Click *Execute* to send the request.
+
+</details>
+<details>
+  <summary><b>For Local Authorization Server</b></summary>
+
+  1. Make sure that the server starting with URL `http://op.localhost/...` is selected.
+  2. Open the *POST /* Endpoint.
+  3. Click *Try it out*.
+  4. Paste a sufficient Token Request JWT to the *Request Body*.
+  5. Click *Execute* to send the request.
+
+</details>
 
 
 ### Testing with Swagger Editor
