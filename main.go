@@ -30,5 +30,9 @@ func main() {
 		port = "8080"
 	}
 
+	log.Printf("Configuration loaded")
+
+	log.Printf("Running on port " + port)
+
 	log.Fatal(http.ListenAndServe(":"+port, router))
 }
