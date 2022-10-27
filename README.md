@@ -11,6 +11,28 @@ We do not guarantee a secure implementation!
 **Do not use this in production!!!**
 
 
+## Table of Contents
+
+- [Documentation](#documentation)
+  - [Architecture](#architecture)
+  - [Server Configuration](#server-configuration)
+  - [Improve Security](#improve-security)
+  - [REST Endpoint](#rest-endpoint)
+- [Environment Setup](#environment-setup)
+  - [1. Clone Repository](#1-clone-repository)
+  - [2. Generate Secrets](#2-generate-secrets)
+  - [3. Configure Deployment](#3-configure-deployment)
+  - [4. Initial Infrastructure Start](#4-initial-infrastructure-start)
+  - [5. Setup OpenID Provider](#5-setup-openid-provider)
+  - [6. Configure Deployment Mode](#6-configure-deployment-mode)
+  - [7. Restart Infrastructure](#7-restart-infrastructure)
+- [Testing](#testing)
+  - [Request Token JWT Generation](#request-token-jwt-generation)
+  - [Testing with API Specification](#testing-with-api-specification)
+  - [Testing with Swagger Editor](#testing-with-swagger-editor)
+  - [Testing with Postman](#testing-with-postman)
+
+
 ## Documentation
 
 This section provides an introduction to the architecture and the configuration of the Remote ID Token Endpoint.
@@ -218,13 +240,13 @@ This section describes how to setup a test environment locally with Docker Compo
 In your Linux bash, clone this repository to your home directory:
 
 ```bash
-~$ git clone https://github.com/JonasPrimbs/oidc-e2ea-server.git
+git clone https://github.com/JonasPrimbs/oidc-e2ea-server.git
 ```
 
 Now navigate to the cloned directory:
 
 ```bash
-~$ cd oidc-e2ea-server
+cd oidc-e2ea-server
 ```
 
 
@@ -233,7 +255,7 @@ Now navigate to the cloned directory:
 Execute the following command:
 
 ```bash
-~/oidc-e2ea-server$ bash ./generate-secrets.sh
+bash ./generate-secrets.sh
 ```
 
 This will randomly generate all usernames, passwords, and private keys which are unique for your installation and store them in the new directory `.secrets` in the repository.
@@ -241,12 +263,12 @@ This will randomly generate all usernames, passwords, and private keys which are
 
 ### 3. Configure Deployment
 
-Go to the generated `~/oidc-e2ea-server/.env` file and configure the following parameters:
+Go to the generated `/.env` file and configure the following parameters:
 
 - `OP_HOST=<your-hostname>` the host/domain name of your server. Default is `op.localhost`.
 - `REALM_NAME=<your-realm-name>` the name of your preferred Keycloak realm. Default is `ridt`.
 
-You can leave these settings at default.
+For a local deployment, you can leave these settings at default.
 
 
 ### 4. Initial Infrastructure Start
@@ -254,7 +276,7 @@ You can leave these settings at default.
 Start up your OpenID Provider for the first time using the following command:
 
 ```bash
-~/oidc-e2ea-server$ docker compose up -d op
+docker compose up -d op
 ```
 
 This might take a while to download all related container images.
@@ -265,9 +287,9 @@ This might take a while to download all related container images.
 
 #### 5.1. Login to Keycloak Admin Console
 
-Open your browser and go to [http://op.localhost/admin/](http://op.localhost/admin/) and *sign in* with the credentials generated in the following files:
-- Username: `~/oidc-e2ea-server/.secrets/op_username.txt`
-- Password: `~/oidc-e2ea-server/.secrets/op_password.txt`
+Open your browser and go to [http://op.localhost/admin/ (external URL)](http://op.localhost/admin/) and *sign in* with the credentials generated in the following files:
+- Username: `/.secrets/op_username.txt`
+- Password: `/.secrets/op_password.txt`
 
 
 #### 5.2. Create Realm
@@ -284,7 +306,7 @@ Create a new realm called `ridt` as follows:
 Import the realm settings as follows:
 
 1. In your new test realm, go to *Manage* > *Import*.
-2. Click on *Select file* and select the file `~/oidc-e2ea-server/keycloak/realm-export.json`.
+2. Click on *Select file* and select the file `/keycloak/realm-export.json`.
 3. Click *Import*.
 
 
@@ -292,19 +314,19 @@ Import the realm settings as follows:
 
 Import the private key as follows:
 
-1. In your new test realm, go to *Configure* > *Realm Settings* > *Keys* > *Providers*
+1. In your new test realm, go to *Configure* > *Realm Settings* > *Keys* > *Providers*.
 2. On top of the table, open the dropdown menu *Add keystore...* and select *rsa*.
 3. Enter the *priority* `101`.
-4. As *Private RSA Key*, *Select file* `~/oidc-e2ea-server/.secrets/private.pem`.
+4. As *Private RSA Key*, *Select file* `/.secrets/private.pem`.
 5. Click *Save*.
-6. In *Configure* > *Realm Settings* > *Keys* > *Active*, copy the *Kid* of the new RSA key with priority `101` and paste it to the file `~/oidc-e2ea-server/.secrets/ridt.env` as value for the parameter `KID`, e.g., `KID=rojPQoDRx_DD-DFs7y45wDLl5T8b9VmX6iQapIK6cRE`.
+6. In *Configure* > *Realm Settings* > *Keys* > *Active*, copy the *Kid* of the new RSA key with priority `101` and paste it to the file `/.secrets/ridt.env` as value for the parameter `KID`, e.g., `KID=rojPQoDRx_DD-DFs7y45wDLl5T8b9VmX6iQapIK6cRE`.
 
 
 #### 5.5. Create Test User
 
 Create a new test user as follows:
 
-1. In your new test realm, go to *Manage* > *Users*
+1. In your new test realm, go to *Manage* > *Users*.
 2. On top of the table, click the *Add user* button.
 3. Enter a *username*, e.g., `test`.
 4. It is recommended that you also enter an *Email* address, a *First Name*, and a *Last Name*.
@@ -327,7 +349,7 @@ This step depends on your intention why you run this deployment.
 
 *Do this step only if you want to run this deployment for **testing** purposes!*
 
-1. Go to `~/oidc-e2ea-server/docker-compose.yaml`.
+1. Go to `/docker-compose.yaml`.
 2. Uncomment line 61 (`image` attribute in service `ridt`).
 3. Comment line 64 to 66 (`build` attribute in service `ridt`).
 
@@ -336,7 +358,7 @@ This step depends on your intention why you run this deployment.
 
 *Do this step only if you want to run this deployment for **development** purposes!*
 
-1. Go to `~/oidc-e2ea-server/docker-compose.yaml`.
+1. Go to `/docker-compose.yaml`.
 2. Make sure that line 61 (`image` attribute in service `ridt`) is commented out.
 3. Make sure that line 64 to 66 (`build` attribute in service `ridt`) are not commented.
 
@@ -346,13 +368,13 @@ This step depends on your intention why you run this deployment.
 Stop the infrastructure with the following command:
 
 ```bash
-~/oidc-e2ea-server$ docker compose down
+docker compose down
 ```
 
 And start it again:
 
 ```bash
-~/oidc-e2ea-server$ docker compose up -d
+docker compose up -d
 ```
 
 
@@ -487,7 +509,7 @@ Therefore, you must authorize Postman as follows:
        - *Auth URL*: `https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/auth`
        - *Access Token URL*: `https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/token`
        - *Client ID*: `postman`
-   4. Click *Get New Access Token*
+   4. Click *Get New Access Token*.
    5. *Sign In* to your test user account, if requested.
    6. Click *Use Token*.
 
@@ -504,7 +526,7 @@ Therefore, you must authorize Postman as follows:
        - *Auth URL*: `http://op.localhost/realms/ridt/protocol/openid-connect/auth`
        - *Access Token URL*: `http://op.localhost/realms/ridt/protocol/openid-connect/token`
        - *Client ID*: `postman`
-   4. Click *Get New Access Token*
+   4. Click *Get New Access Token*.
    5. *Sign In* to your test user account, if requested.
    6. Click *Use Token*.
 
