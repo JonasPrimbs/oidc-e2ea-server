@@ -73,18 +73,19 @@ services:
     labels:
       - traefik.enable=true                                       # Enable Traefik reverse proxy exposure
       - traefik.http.routers.ridt.entrypoints=web                 # Enable exposure via HTTP entrypoint 'web'
-      - |                                                         # Specify routing via hostname provided in environment variable 'OP_HOST' and append it to userinfo endpoint
-        traefik.http.routers.ridt.rule=(Host(`${OP_HOST}`) && PathPrefix(`/realms/${REALM_NAME}/protocol/openid-connect/userinfo/ridt`))
+      - >-                                                        # Specify routing via hostname provided in environment variable 'OP_HOST' and append it to userinfo endpoint
+        traefik.http.routers.ridt.rule=(Host(`${OP_HOST}`) &&
+        PathPrefix(`/realms/${REALM_NAME}/protocol/openid-connect/userinfo/ridt`))
       - traefik.http.routers.ridt.priority=2                      # Set priority high (traefik.http.routers.op.priority must be lower)
       - traefik.http.routers.ridt.middlewares=ridt@docker         # Include 'ridt' middleware from Docker labels below 
-      - |                                                         # Remove .../userinfo/ridt path from request
+      - >-                                                        # Remove .../userinfo/ridt path from request
         traefik.http.middlewares.ridt.replacepathregex.regex=^/realms/${REALM_NAME}/protocol/openid-connect/userinfo/ridt(.*)
-      - |                                                         # Forward only path after .../userinfo/ridt (marked with '(.*)') in request to RIDT endpoint
+      - >-                                                        # Forward only path after .../userinfo/ridt (marked with '(.*)') in request to RIDT endpoint
         traefik.http.middlewares.ridt.replacepathregex.replacement=$$1
     environment:
       KEY_FILE: /run/secrets/op_private_key                       # Set private key file to Docker Secret 'op_private_key'
       ALG: RS256                                                  # Configure RSA with SHA256 (RS256) as signature algorithm for Remote ID Tokens
-      USERINFO: |                                                 # Configure userinfo endpoint ('op' is the Docker-internal hostname of OpenID Provider service)
+      USERINFO: >-                                                # Configure userinfo endpoint ('op' is the Docker-internal hostname of OpenID Provider service)
         http://op:8080/realms/${REALM_NAME}/protocol/openid-connect/userinfo
       ISSUER: http://op.localhost/realms/${REALM_NAME}            # Configure issuer of issued Remote ID Tokens
       DEFAULT_TOKEN_PERIOD: 3600                                  # Configure the default lifetime of issued Remote ID Tokens in seconds (3600s = 1h)
