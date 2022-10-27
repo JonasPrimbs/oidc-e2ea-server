@@ -57,6 +57,8 @@ Example:
 KEY_FILE="/path/to/private_key.pem"
 ```
 
+Setting this variable is **required**.
+
 
 #### Key ID
 
@@ -64,13 +66,15 @@ The ID of the OpenID Provider's Public Key provided in the `jwks_uri` endpoint.
 
 Example 1:
 ```bash
-KID="abcdef"
+KID="rojPQoDRx_DD-DFs7y45wDLl5T8b9VmX6iQapIK6cRE"
 ```
 
 Example 2:
 ```bash
 KID=1
 ```
+
+Setting this variable is **required**.
 
 
 #### Signing Algorithm
@@ -108,8 +112,10 @@ USERINFO="https://openid-provider.sample.org/userinfo"
 
 Example 2 (Keycloak):
 ```bash
-USERINFO="http://localhost:8080/realms/test/protocol/openid-connect/userinfo"
+USERINFO="http://localhost:8080/realms/ridt/protocol/openid-connect/userinfo"
 ```
+
+Setting this variable is **required**.
 
 
 #### Issuer Claim
@@ -126,8 +132,10 @@ ISSUER="https://accounts.sample.org/"
 
 Example 2:
 ```bash
-ISSUER="http://localhost:8080/realms/test"
+ISSUER="http://localhost:8080/realms/ridt"
 ```
+
+Setting this variable is **required**.
 
 
 #### Token Validity Period
@@ -179,6 +187,18 @@ Example:
 ```bash
 DB_SQLITE_FILE="/config/db.sqlite"
 ```
+
+
+### Improve Security
+
+This section provides some hints how to improve the security of the deployment.
+
+
+#### 1. Use Containers
+
+The container image of the RIDT endpoint is provided on [DockerHub (external URL)](https://hub.docker.com/r/jonasprimbs/oidc-e2ea-server).
+
+Follow the instructions there to deploy the container or use the Docker Compose file [here](./docker-compose.yaml) to run a predefined composition with [Keycloak (external URL)](https://www.keycloak.org/) as OpenID Provider.
 
 
 ### REST Endpoint
@@ -496,7 +516,7 @@ Now you can perform requests to the server as follows:
   <summary><b>For Public Authorization Server</b></summary>
 
    1. Select the HTTP Method *POST*.
-   2. Insert the URL `https://op.oidc-e2e.primbs.dev/realms/test/protocol/openid-connect/userinfo/ridt`.
+   2. Insert the URL `https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/userinfo/ridt`.
    3. Go to the *Body* tab and insert the Token Request JWT as *raw*.
    4. Click *Send*.
 
@@ -506,7 +526,7 @@ Now you can perform requests to the server as follows:
   <summary><b>For Local Authorization Server</b></summary>
 
    1. Select the HTTP Method *POST*.
-   2. Insert the URL `http://op.localhost/realms/test/protocol/openid-connect/userinfo/ridt`.
+   2. Insert the URL `http://op.localhost/realms/ridt/protocol/openid-connect/userinfo/ridt`.
    3. Go to the *Body* tab and insert the Token Request JWT as *raw*.
    4. Click *Send*.
 
