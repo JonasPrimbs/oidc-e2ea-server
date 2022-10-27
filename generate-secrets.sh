@@ -33,14 +33,20 @@ function generate_secret {
 [ ! -f "$OP_PASSWORD_FILE" ] && generate_secret "$OP_PASSWORD_FILE" 64
 
 # Write DB username + password to op.env file
-[ ! -f "$OP_ENV_FILE" ] && echo "KC_DB_USERNAME=$(cat $DB_USERNAME_FILE)" > "$OP_ENV_FILE"
-                        && echo "KC_DB_PASSWORD=$(cat $DB_PASSWORD_FILE)" >> "$OP_ENV_FILE"
-                        && echo "KEYCLOAK_ADMIN=$(cat $OP_USERNAME_FILE)" >> "$OP_ENV_FILE"
-                        && echo "KEYCLOAK_ADMIN_PASSWORD=$(cat $OP_PASSWORD_FILE)" >> "$OP_ENV_FILE"
+if [ ! -f "$OP_ENV_FILE" ]
+then
+    echo "KC_DB_USERNAME=$(cat $DB_USERNAME_FILE)" > "$OP_ENV_FILE"
+    echo "KC_DB_PASSWORD=$(cat $DB_PASSWORD_FILE)" >> "$OP_ENV_FILE"
+    echo "KEYCLOAK_ADMIN=$(cat $OP_USERNAME_FILE)" >> "$OP_ENV_FILE"
+    echo "KEYCLOAK_ADMIN_PASSWORD=$(cat $OP_PASSWORD_FILE)" >> "$OP_ENV_FILE"
+fi
 
 # Write empty key ID to ridt.env file
 [ ! -f "$RIDT_ENV_FILE" ] && echo "KID=" > "$RIDT_ENV_FILE"
 
 # Write default hostname and default realm name to .env file
-[ ! -f "$RIDT_ENV_FILE" ] && echo "OP_HOST=op.localhost" > $ENV_FILE
-                          && echo "REALM_NAME=ridt" >> $ENV_FILE
+if [ ! -f "$ENV_FILE" ]
+then
+    echo "OP_HOST=op.localhost" > $ENV_FILE
+    echo "REALM_NAME=ridt" >> $ENV_FILE
+fi
