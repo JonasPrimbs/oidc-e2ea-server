@@ -477,19 +477,51 @@ This is recommended while editing the API Specification.
 
 Therefore, you must authorize Swagger Editor as follows:
 
-1. Open your browser and navigate to the [Swagger Editor (external URL)](https://editor.swagger.io/).
-2. Copy the content of the file `/docs/swagger.yaml` to the left side of the Swagger Editor.
-3. On the right side, click *Authorize*.
-4. Enter the *client_id* `swagger` and *Select all* scopes.
-5. Click *Authorize* and *Sign In* with your test user.
-6. Click *Close*.
+<details>
+  <summary><b>For Public Authorization Server</b></summary>
+
+  1. Open your browser and navigate to the [Swagger Editor (external URL)](https://editor.swagger.io/).
+  2. Click *Authorize*.
+  3. Scroll down to the authorization **oauth2_public**.
+  4. Enter the *client_id* `swagger` and *Select all* scopes.
+  5. Click *Authorize* and *Sign In* with your test user.
+  6. Click *Close*.
+
+</details>
+<details>
+  <summary><b>For Local Authorization Server</b></summary>
+
+  1. Open your browser and navigate to the [Swagger Editor (external URL)](https://editor.swagger.io/).
+  2. Click *Authorize*.
+  3. Scroll down to the authorization **oauth2_local**.
+  4. Enter the *client_id* `swagger` and *Select all* scopes.
+  5. Click *Authorize* and *Sign In* with your test user.
+  6. Click *Close*.
+
+</details>
 
 Now you can perform requests to the server as follows:
 
-1. Open the *POST /* Endpoint.
-2. Click *Try it out*.
-3. Paste a sufficient Token Request JWT to the *Request Body*.
-4. Click *Execute* to send the request.
+<details>
+  <summary><b>For Public Authorization Server</b></summary>
+
+  1. Make sure that the server starting with URL `https://op.oidc-e2e.primbs.dev/...` is selected.
+  2. Open the *POST /* Endpoint.
+  3. Click *Try it out*.
+  4. Paste a sufficient Token Request JWT to the *Request Body*.
+  5. Click *Execute* to send the request.
+
+</details>
+<details>
+  <summary><b>For Local Authorization Server</b></summary>
+
+  1. Make sure that the server starting with URL `http://op.localhost/...` is selected.
+  2. Open the *POST /* Endpoint.
+  3. Click *Try it out*.
+  4. Paste a sufficient Token Request JWT to the *Request Body*.
+  5. Click *Execute* to send the request.
+
+</details>
 
 
 ### Testing with Postman
