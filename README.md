@@ -21,10 +21,10 @@ This section provides an introduction to the architecture and the configuration 
 The following figure shows the overall architecture how to use the provided Remote ID Token (RIDT) Endpoint with any OpenID Provider implementation.
 
 ```
-                                                       +---------+                +----------+
-   /*                                                  |         |       *        |  OpenID  |
-  ---------------------------------------------------> |         |--------------->| Provider |
-                                                       |         |                +----------+
+                                                       +---------+                +----------+           +----------+
+   /*                                                  |         |       *        |  OpenID  |           |   User   |
+  ---------------------------------------------------> |         |--------------->| Provider | <-------> | Database |
+                                                       |         |                +----------+           +----------+
                                                        | Reverse |
                                                        |  Proxy  |
                                                        |         |                +----------+
@@ -37,6 +37,8 @@ The Docker Compose composition provided [here](./docker-compose.yaml) uses the f
 
 - Reverse Proxy: [Traefik Proxy](https://traefik.io/traefik/)
 - OpenID Provider: [Keycloak](https://www.keycloak.org/)
+- User Database: [PostgreSQL](https://www.postgresql.org/)
+- Remote ID Token (RIDT) Endpoint: An HTTP endpoint written in [GO](https://go.dev/)
 
 
 ### Server Configuration
@@ -186,59 +188,101 @@ The REST API is described in the OpenAPI format provided [here](./docs/openapi.y
 
 ## Environment Setup
 
-This section describes how to setup the test infrastructure with Docker Compose.
+This section describes how to setup a test environment locally with Docker Compose.
 
 **WARNING: THIS IS FOR TEST PURPOSES ONLY! DO NOT USE THIS IN PRODUCTION!!!**
 
 
-### 1. Generate Secrets
+### 1. Clone Repository
 
-In your Linux bash, navigate to `/poc` of this cloned repository and run the following command:
+In your Linux bash, clone this repository to your home directory:
 
 ```bash
-/poc$ bash ./generate-secrets.sh
+~$ git clone https://github.com/JonasPrimbs/oidc-e2ea-server.git
 ```
 
-This will randomly generate all usernames, passwords, and private keys which are unique for your installation and store them in the new directory `/poc/.secrets`.
-
-
-### 2. Initial Infrastructure Start
-
-Then start up your infrastructure for the first time using the following command:
+Now navigate to the cloned directory:
 
 ```bash
-/poc$ docker-compose up -d
+~$ cd oidc-e2ea-server
 ```
 
 
-### 3. Setup OpenID Provider
+### 2. Generate Secrets
 
-Now, open your browser and go to [http://op.localhost/admin/](http://op.localhost/admin/) and *sign in* with the default credentials:
-- Username: `admin`
-- Password: `admin`
+Execute the following command:
 
-Then, create a new realm called `test` as follows:
+```bash
+~/oidc-e2ea-server$ bash ./generate-secrets.sh
+```
+
+This will randomly generate all usernames, passwords, and private keys which are unique for your installation and store them in the new directory `.secrets` in the repository.
+
+
+### 3. Configure Deployment
+
+Go to the generated `~/oidc-e2ea-server/.env` file and configure the following parameters:
+
+- `OP_HOST=<your-hostname>` the host/domain name of your server. Default is `op.localhost`.
+- `REALM_NAME=<your-realm-name>` the name of your preferred Keycloak realm. Default is `ridt`.
+
+You can leave these settings at default.
+
+
+### 4. Initial Infrastructure Start
+
+Start up your OpenID Provider for the first time using the following command:
+
+```bash
+~/oidc-e2ea-server$ docker compose up -d op
+```
+
+This might take a while to download all related container images.
+
+
+### 5. Setup OpenID Provider
+
+
+#### 5.1. Login to Keycloak Admin Console
+
+Open your browser and go to [http://op.localhost/admin/](http://op.localhost/admin/) and *sign in* with the credentials generated in the following files:
+- Username: `~/oidc-e2ea-server/.secrets/op_username.txt`
+- Password: `~/oidc-e2ea-server/.secrets/op_password.txt`
+
+
+#### 5.2. Create Realm
+
+Create a new realm called `ridt` as follows:
 
 1. Hover the *Master* realm in the navigation bar and click *Add Realm*.
-2. Enter the realm *name* `test`.
+2. Enter the realm *name* `ridt`.
 3. Click *Create*.
 
-Then, import the realm settings as follows:
+
+#### 5.3. Import Realm Settings
+
+Import the realm settings as follows:
 
 1. In your new test realm, go to *Manage* > *Import*.
-2. Click on *Select file* and select the file `/poc/keycloak/realm-export.json`.
+2. Click on *Select file* and select the file `~/oidc-e2ea-server/keycloak/realm-export.json`.
 3. Click *Import*.
 
-Then, import the private key as follows:
+
+#### 5.4. Import Private Key
+
+Import the private key as follows:
 
 1. In your new test realm, go to *Configure* > *Realm Settings* > *Keys* > *Providers*
 2. On top of the table, open the dropdown menu *Add keystore...* and select *rsa*.
 3. Enter the *priority* `101`.
-4. As *Private RSA Key*, *Select file* `/poc/.secrets/private.pem`.
+4. As *Private RSA Key*, *Select file* `~/oidc-e2ea-server/.secrets/private.pem`.
 5. Click *Save*.
-6. In *Configure* > *Realm Settings* > *Keys* > *Active*, copy the *Kid* of the new RSA key with priority `101` and paste it to the file `/poc/.secrets/ridt.env` as value for the parameter `KID`, e.g., `KID=rojPQoDRx_DD-DFs7y45wDLl5T8b9VmX6iQapIK6cRE`.
+6. In *Configure* > *Realm Settings* > *Keys* > *Active*, copy the *Kid* of the new RSA key with priority `101` and paste it to the file `~/oidc-e2ea-server/.secrets/ridt.env` as value for the parameter `KID`, e.g., `KID=rojPQoDRx_DD-DFs7y45wDLl5T8b9VmX6iQapIK6cRE`.
 
-Finally, create a new test user:
+
+#### 5.5. Create Test User
+
+Create a new test user as follows:
 
 1. In your new test realm, go to *Manage* > *Users*
 2. On top of the table, click the *Add user* button.
@@ -251,18 +295,44 @@ Finally, create a new test user:
 9. Apply with *Set password*.
 
 
-### 4. Restart Infrastructure
+### 6. Configure Deployment Mode
 
-Now, stop the infrastructure with the following command:
+This step depends on your intention why you run this deployment.
+
+- **Testing**: Choose this mode if you want to just run the deployment for testing purposes.
+- **Development**: Choose this mode if you want to change the implementation of the RIDT endpoint application.
+
+
+#### 6.1. Test Deployment
+
+*Do this step only if you want to run this deployment for **testing** purposes!*
+
+1. Go to `~/oidc-e2ea-server/docker-compose.yaml`.
+2. Uncomment line 61 (`image` attribute in service `ridt`).
+3. Comment line 64 to 66 (`build` attribute in service `ridt`).
+
+
+#### 6.2. Development Deployment
+
+*Do this step only if you want to run this deployment for **development** purposes!*
+
+1. Go to `~/oidc-e2ea-server/docker-compose.yaml`.
+2. Make sure that line 61 (`image` attribute in service `ridt`) is commented out.
+3. Make sure that line 64 to 66 (`build` attribute in service `ridt`) are not commented.
+
+
+### 7. Restart Infrastructure
+
+Stop the infrastructure with the following command:
 
 ```bash
-/poc$ docker-compose down
+~/oidc-e2ea-server$ docker compose down
 ```
 
 And start it again:
 
 ```bash
-/poc$ docker-compose up -d
+~/oidc-e2ea-server$ docker compose up -d
 ```
 
 
@@ -270,20 +340,21 @@ And start it again:
 
 In the `realm-export.json` are already client applications included to test the API with
 
+- [API Specification](#testing-with-api-specification) or
 - [Swagger Editor](#testing-with-swagger-editor) or
 - [Postman](#testing-with-postman).
 
 
 ### Request Token JWT Generation
 
-To create a sufficient Token Request JWT, you can go to [https://jwt.io](https://jwt.io) and create one.
-You can use the ES256 private key from the [examples](../examples/key-examples.md#private-key) to sign your key or use the [code example](../examples/code-examples.md#key-pair-generation-and-export) to generate a new one.
-You can also use the Token Request JWT from the [communication examples](../examples/communication-examples.md#token-request) as template.
+To create a sufficient Token Request JWT, you can go to [JWT.io (external URL)](https://jwt.io) and create one.
+You can use the ES256 private key from the [key examples (external repository)](https://github.com/JonasPrimbs/draft-ietf-mla-oidc/tree/main/examples/key-examples.md#private-key) to sign your key or use the [code example (external repository)](https://github.com/JonasPrimbs/draft-ietf-mla-oidc/tree/main/examples/code-examples.md#key-pair-generation-and-export) to generate a new one.
+You can also use the Token Request JWT from the [communication examples (external repository)](https://github.com/JonasPrimbs/draft-ietf-mla-oidc/tree/main/examples/communication-examples.md#token-request) as template.
 
 The following JWT can be used as a template:
 
 ```jwt
-eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6ImNYUThiZGVOZWVTd2ZMa0h6TWZBVUZySGxMWFpXdkpybW9NMnNDUEdVbmciLCJ5IjoiN0Rwd21Pb0hJbmQwUWNSRVJUS1pBQ2k5YndzYTVnR0tER3hGeG00OEdSQSJ9fQ.eyJpc3MiOiJwb3N0bWFuIiwic3ViIjoiOWJiYWEyZjctNjlhOS00ZWFlLWI2YjgtOTRmYzY2MDExMmZjIiwiYXVkIjoiaHR0cDovL29wLmxvY2FsaG9zdC9yZWFsbXMvdGVzdCIsImlhdCI6MTY1OTM1NTIwNSwibmJmIjoxNjU5MzU1MjA1LCJleHAiOjE2NjkzNTUyMzUsIm5vbmNlIjoiVmpmVTQ2WjV5a0lobjdqSnpxWm9XSytwYXE2M0VLdUgiLCJ0b2tlbl9jbGFpbXMiOiJuYW1lIGVtYWlsIGVtYWlsX3ZlcmlmaWVkIiwidG9rZW5fbGlmZXRpbWUiOjM2MDAsInRva2VuX25vbmNlIjoiQmp4cTI3RlVsQjBYQVcyaWIrWnM2czU3UlFyY21VeEEifQ.VXvKD-ZzrU_ESdFu8sa10GVK-fUvX3IlUGzCYJ27a-S-fdmKD72KmQRtL_91non7fUjWJOZLJrWg4vwKUYqrDA
+eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6ImNYUThiZGVOZWVTd2ZMa0h6TWZBVUZySGxMWFpXdkpybW9NMnNDUEdVbmciLCJ5IjoiN0Rwd21Pb0hJbmQwUWNSRVJUS1pBQ2k5YndzYTVnR0tER3hGeG00OEdSQSJ9fQ.eyJpc3MiOiJwb3N0bWFuIiwic3ViIjoiOWJiYWEyZjctNjlhOS00ZWFlLWI2YjgtOTRmYzY2MDExMmZjIiwiYXVkIjoiaHR0cDovL29wLmxvY2FsaG9zdC9yZWFsbXMvcmlkdCIsImlhdCI6MTY1OTM1NTIwNSwibmJmIjoxNjU5MzU1MjA1LCJleHAiOjE2NjkzNTUyMzUsIm5vbmNlIjoiVmpmVTQ2WjV5a0lobjdqSnpxWm9XSytwYXE2M0VLdUgiLCJ0b2tlbl9jbGFpbXMiOiJuYW1lIGVtYWlsIGVtYWlsX3ZlcmlmaWVkIiwidG9rZW5fbGlmZXRpbWUiOjM2MDAsInRva2VuX25vbmNlIjoiQmp4cTI3RlVsQjBYQVcyaWIrWnM2czU3UlFyY21VeEEifQ.BrfJYyrU1bZVWRawXO3Jowic3H84RaIzZDp_e8obviBlLLaq09tAnSUuVGLJ2hw4EIw1enALLtk_F5ZwEMqLlQ
 ```
 
 It has the following payload (without comments):
@@ -292,7 +363,7 @@ It has the following payload (without comments):
 {
   "alg": "ES256",
   "typ": "JWT",
-  "jwk": { // The client's public key:
+  "jwk": {  // The client's public key:
     "kty": "EC",
     "crv": "P-256",
     "x": "cXQ8bdeNeeSwfLkHzMfAUFrHlLXZWvJrmoM2sCPGUng",
@@ -306,31 +377,70 @@ and the following payload (without comments):
 ```json
 {
   "iss": "postman", // The client ID.
-  "sub": "9bbaa2f7-69a9-4eae-b6b8-94fc660112fc", // The user's unique identifier. In Keycloak, this is a UUID which is displayed in the Users menu.
-  "aud": "http://op.localhost/realms/test", // The OpenID Provider's URL = issuer of the Remote ID Token.
-  "iat": 1659355205, // Unix timestamp when the token was issued.
-  "nbf": 1659355205, // Unix timestamp when the token becomes valid.
-  "exp": 1669355235, // Unix timestamp when the token expires.
-  "nonce": "VjfU46Z5ykIhn7jJzqZoWK+paq63EKuH", // A random nonce.
-  "token_claims": "name email email_verified", // The requested identity claims for the Remote ID Token.
+  "sub": "9bbaa2f7-69a9-4eae-b6b8-94fc660112fc",  // The user's unique identifier. In Keycloak, this is a UUID which is displayed in the Users menu.
+  "aud": "http://op.localhost/realms/ridt", // The OpenID Provider's URL = issuer of the Remote ID Token.
+  "iat": 1659355205,  // Unix timestamp when the token was issued.
+  "nbf": 1659355205,  // Unix timestamp when the token becomes valid.
+  "exp": 1669355235,  // Unix timestamp when the token expires.
+  "nonce": "VjfU46Z5ykIhn7jJzqZoWK+paq63EKuH",  // A random nonce.
+  "token_claims": "name email email_verified",  // The requested identity claims for the Remote ID Token.
   "token_lifetime": 3600, // The requested lifetime of the Remote ID Token.
   "token_nonce": "Bjxq27FUlB0XAW2ib+Zs6s57RQrcmUxA" // A random nonce to set into the Remote ID Token.
 }
 ```
 
 
+### Testing with API Specification
+
+You can test the infrastructure with our API documentation.
+This is recommended if you want to play with the API.
+
+Therefore, you must authorize the API documentation as follows:
+
+<details>
+  <summary><b>For Public Authorization Server</b></summary>
+
+  1. Open your browser and navigate to the [API documentation (external URL)](https://api.oidc-e2e.primbs.dev/).
+  2. Click *Authorize*.
+  3. Scroll down to the authorization **oauth2_public**.
+  4. Enter the *client_id* `api` and *Select all* scopes.
+  5. Click *Authorize* and *Sign In* with your test user.
+  6. Click *Close*.
+  
+</details>
+<details>
+  <summary><b>For Local Authorization Server</b></summary>
+
+  1. Open your browser and navigate to the [API documentation (external URL)](https://api.oidc-e2e.primbs.dev/).
+  2. Click *Authorize*.
+  3. Scroll down to the authorization **oauth2_local**.
+  4. Enter the *client_id* `api` and *Select all* scopes.
+  5. Click *Authorize* and *Sign In* with your test user.
+  6. Click *Close*.
+
+</details>
+
+Now you can perform requests to the server as follows:
+
+1. Open the *POST /* Endpoint.
+2. Click *Try it out*.
+3. Paste a sufficient Token Request JWT to the *Request Body*.
+4. Click *Execute* to send the request.
+
+
 ### Testing with Swagger Editor
 
 You can test the infrastructure with Swagger Editor.
+This is recommended while editing the API Specification.
 
 Therefore, you must authorize Swagger Editor as follows:
 
-1. Open your browser and go to [https://editor.swagger.io](https://editor.swagger.io).
-2. Copy the content of the file `/poc/ridt-endpoint/api/swagger.yaml` to the left side of the Swagger Editor.
+1. Open your browser and navigate to the [Swagger Editor (external URL)](https://editor.swagger.io/).
+2. Copy the content of the file `/docs/swagger.yaml` to the left side of the Swagger Editor.
 3. On the right side, click *Authorize*.
 4. Enter the *client_id* `swagger` and *Select all* scopes.
-6. Click *Authorize* and *Sign In* with your test user.
-7. Click *Close*.
+5. Click *Authorize* and *Sign In* with your test user.
+6. Click *Close*.
 
 Now you can perform requests to the server as follows:
 
@@ -346,21 +456,58 @@ You can test the infrastructure with Postman.
 
 Therefore, you must authorize Postman as follows:
 
-1. Open a new Tab and go to the *Authorization* tab.
-2. As *Type*, select `OAuth 2.0`.
-3. In *Configure New Token* > *Configuration Options* insert the following values:
-    - *Grant Type*: `Authorization Code (With PKCE)`
-    - *Callback URL*: `https://oauth.pstmn.io/v1/callback` and tick *Authorize using browser*.
-    - *Auth URL*: `http://op.localhost/realms/test/protocol/openid-connect/auth`
-    - *Access Token URL*: `http://op.localhost/realms/test/protocol/openid-connect/token`
-    - *Client ID*: `postman`
-4. Click *Get New Access Token*
-5. *Sign In* to your test user account, if requested.
-6. Click *Use Token*.
+<details>
+  <summary><b>For Public Authorization Server</b></summary>
+
+   1. Open a new Tab and go to the *Authorization* tab.
+   2. As *Type*, select `OAuth 2.0`.
+   3. In *Configure New Token* > *Configuration Options* insert the following values:
+       - *Grant Type*: `Authorization Code (With PKCE)`
+       - *Callback URL*: `https://oauth.pstmn.io/v1/callback` and tick *Authorize using browser*.
+       - *Auth URL*: `https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/auth`
+       - *Access Token URL*: `https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/token`
+       - *Client ID*: `postman`
+   4. Click *Get New Access Token*
+   5. *Sign In* to your test user account, if requested.
+   6. Click *Use Token*.
+
+</details>
+
+<details>
+  <summary><b>For Local Authorization Server</b></summary>
+
+   1. Open a new Tab and go to the *Authorization* tab.
+   2. As *Type*, select `OAuth 2.0`.
+   3. In *Configure New Token* > *Configuration Options* insert the following values:
+       - *Grant Type*: `Authorization Code (With PKCE)`
+       - *Callback URL*: `https://oauth.pstmn.io/v1/callback` and tick *Authorize using browser*.
+       - *Auth URL*: `http://op.localhost/realms/ridt/protocol/openid-connect/auth`
+       - *Access Token URL*: `http://op.localhost/realms/ridt/protocol/openid-connect/token`
+       - *Client ID*: `postman`
+   4. Click *Get New Access Token*
+   5. *Sign In* to your test user account, if requested.
+   6. Click *Use Token*.
+
+</details>
 
 Now you can perform requests to the server as follows:
 
-1. Select the HTTP Method *POST*.
-2. Insert the URL `http://op.localhost/realms/test/protocol/openid-connect/userinfo/ridt`.
-3. Go to the *Body* tab and insert the Token Request JWT as *raw*.
-4. Click *Send*.
+<details>
+  <summary><b>For Public Authorization Server</b></summary>
+
+   1. Select the HTTP Method *POST*.
+   2. Insert the URL `https://op.oidc-e2e.primbs.dev/realms/test/protocol/openid-connect/userinfo/ridt`.
+   3. Go to the *Body* tab and insert the Token Request JWT as *raw*.
+   4. Click *Send*.
+
+</details>
+
+<details>
+  <summary><b>For Local Authorization Server</b></summary>
+
+   1. Select the HTTP Method *POST*.
+   2. Insert the URL `http://op.localhost/realms/test/protocol/openid-connect/userinfo/ridt`.
+   3. Go to the *Body* tab and insert the Token Request JWT as *raw*.
+   4. Click *Send*.
+
+</details>
