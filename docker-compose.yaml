@@ -57,7 +57,7 @@ services:
       - db_password                                               # Use shared Docker Secret 'db_password'
   # RIDT endpoint (this Go application):
   ridt:
-    # For production:
+    # For testing:
     #image: jonasprimbs/oidc-e2ea-server:latest                    # Use latest image from Docker Hub
 
     # For development:

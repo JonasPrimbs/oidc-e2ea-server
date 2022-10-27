@@ -5,6 +5,7 @@ info:
   version: 0.2.0
 servers:
 - url: https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/userinfo/ridt
+- url: http://op.localhost/realms/ridt/protocol/openid-connect/userinfo/ridt
 paths:
   /:
     post:
@@ -95,7 +96,11 @@ paths:
                     status: Internal Server Error
                     description: Unknown Server Error.
       security:
-      - iat_auth:
+      - oauth2_public:
+        - openid
+        - profile
+        - email
+      - oauth2_local:
         - openid
         - profile
         - email
@@ -314,12 +319,45 @@ components:
         - "EC"
         - "RSA"
   securitySchemes:
-    iat_auth:
+    oauth2_public:
       type: oauth2
       flows:
         authorizationCode:
           authorizationUrl: https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/auth
           tokenUrl: https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/token
+          scopes:
+            openid: |
+              **General OpenID Connect authorization**
+            profile: |
+              **OpenID Connect profile information**
+
+              Authorizes access to the following profile claims:
+                - `name`
+                - `family_name`
+                - `given_name`
+                - `middle_name`
+                - `nickname`
+                - `preferred_username`
+                - `profile`
+                - `picture`
+                - `website`
+                - `gender`
+                - `birthdate`
+                - `zoneinfo`
+                - `locale`
+                - `updated_at`
+            email: |
+              **OpenID Connect email address information**
+
+              Authorizes access to the following profile claims:
+                - `email`
+                - `email_verified`
+    oauth2_local:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: http://op.localhost/realms/ridt/protocol/openid-connect/auth
+          tokenUrl: http://op.localhost/realms/ridt/protocol/openid-connect/token
           scopes:
             openid: |
               **General OpenID Connect authorization**
