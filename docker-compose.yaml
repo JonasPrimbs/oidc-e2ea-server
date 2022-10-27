@@ -86,7 +86,7 @@ services:
       - |                                                         # Forward only path after .../userinfo/ridt (marked with '(.*)') in request to RIDT endpoint
         traefik.http.middlewares.ridt.replacepathregex.replacement=$$1
     environment:
-      KEY_FILE: /run/secrets/private_key                          # Set private key file to Docker Secret 'private_key'
+      KEY_FILE: /run/secrets/op_private_key                       # Set private key file to Docker Secret 'op_private_key'
       ALG: RS256                                                  # Configure RSA with SHA256 (RS256) as signature algorithm for Remote ID Tokens
       USERINFO: |                                                 # Configure userinfo endpoint ('op' is the Docker-internal hostname of OpenID Provider service)
         http://op:8080/realms/${REALM_NAME}/protocol/openid-connect/userinfo
@@ -97,7 +97,7 @@ services:
     env_file:
       - ./.secrets/ridt.env                                       # Include secrets from generated environment variables
     secrets:
-      - private_key                                               # Use shared Docker Secret 'private_key'
+      - op_private_key                                            # Use shared Docker Secret 'op_private_key'
 
 # Shared Docker Volumes:
 volumes:
@@ -109,5 +109,5 @@ secrets:
     file: ./.secrets/db_username.txt                              # Use generated database username
   db_password:                                                    # Specify shared Docker Secret 'db_password'
     file: ./.secrets/db_password.txt                              # Use generated database password
-  private_key:                                                    # Specify shared Docker Secret 'private_key'
+  op_private_key:                                                 # Specify shared Docker Secret 'op_private_key'
     file: ./.secrets/private.pem                                  # Use generated private key
