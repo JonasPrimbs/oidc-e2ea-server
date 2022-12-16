@@ -2,7 +2,7 @@
 
 This repository provides the proof-of-concept implementation of the end-to-end authentication for an OpenID Connect OpenID Provider server.
 
-The provided implementation is written in [Go](https://golang.org/) and implements a REST endpoint for the Remote ID Token UserInfo endpoint.
+The provided implementation is written in [Go](https://golang.org/) and implements a REST endpoint for the ID Assertion Token UserInfo endpoint.
 Using a reverse proxy in front, it can be mounted to any OpenID Provider implementation.
 
 **Warning:**
@@ -35,12 +35,12 @@ We do not guarantee a secure implementation!
 
 ## Documentation
 
-This section provides an introduction to the architecture and the configuration of the Remote ID Token Endpoint.
+This section provides an introduction to the architecture and the configuration of the ID Assertion Token Endpoint.
 
 
 ### Architecture
 
-The following figure shows the overall architecture how to use the provided Remote ID Token (RIDT) Endpoint with any OpenID Provider implementation.
+The following figure shows the overall architecture how to use the provided ID Assertion Token (IAT) Endpoint with any OpenID Provider implementation.
 
 ```
                                                        +---------+                +----------+           +----------+
@@ -50,7 +50,7 @@ The following figure shows the overall architecture how to use the provided Remo
                                                        | Reverse |
                                                        |  Proxy  |
                                                        |         |                +----------+
-   /realms/test/protocol/openid-connect/userinfo/ridt  |         |       /        |   RIDT   |
+   /realms/test/protocol/openid-connect/userinfo/iat  |         |       /        |   IAT   |
   ---------------------------------------------------> |         |--------------->| Endpoint |
                                                        +---------+                +----------+
 ```
@@ -60,12 +60,12 @@ The Docker Compose composition provided [here](./docker-compose.yaml) uses the f
 - Reverse Proxy: [Traefik Proxy](https://traefik.io/traefik/)
 - OpenID Provider: [Keycloak](https://www.keycloak.org/)
 - User Database: [PostgreSQL](https://www.postgresql.org/)
-- Remote ID Token (RIDT) Endpoint: An HTTP endpoint written in [GO](https://go.dev/)
+- ID Assertion Token (IAT) Endpoint: An HTTP endpoint written in [GO](https://go.dev/)
 
 
 ### Server Configuration
 
-This section describes the configuration parameters of the RIDT Endpoint.
+This section describes the configuration parameters of the IAT Endpoint.
 They are applied by injecting them as environment variables to the running application.
 This can be done by defining the variables in the Docker container or by placing an `.env` file in the execution directory.
 
@@ -101,7 +101,7 @@ Setting this variable is **required**.
 
 #### Signing Algorithm
 
-Signing algorithm for Remote ID Token signatures.
+Signing algorithm for ID Assertion Token signatures.
 
 Allowed values are:
 
@@ -124,8 +124,8 @@ ALG="ES256"
 
 Absolute URI to the OpenID Provider's Userinfo Endpoint.
 
-This URI is used by the RIDT Endpoint to request the claims of the Remote ID Token from the OpenID Provider.
-**Make sure that the running RIDT Endpoint can access the OpenID Provider's Userinfo Endpoint via this URI!**
+This URI is used by the IAT Endpoint to request the claims of the ID Assertion Token from the OpenID Provider.
+**Make sure that the running IAT Endpoint can access the OpenID Provider's Userinfo Endpoint via this URI!**
 
 Example 1:
 ```bash
@@ -134,7 +134,7 @@ USERINFO="https://openid-provider.sample.org/userinfo"
 
 Example 2 (Keycloak):
 ```bash
-USERINFO="http://localhost:8080/realms/ridt/protocol/openid-connect/userinfo"
+USERINFO="http://localhost:8080/realms/iat/protocol/openid-connect/userinfo"
 ```
 
 Setting this variable is **required**.
@@ -142,9 +142,9 @@ Setting this variable is **required**.
 
 #### Issuer Claim
 
-The Remote ID Token's Issuer.
+The ID Assertion Token's Issuer.
 
-This is the value of the `iss` claim of the issued Remote ID Token.
+This is the value of the `iss` claim of the issued ID Assertion Token.
 Typically, this is the public URI of the OpenID Provider where `.well-known/openid-configuration` is added to request the OpenID configuration.
 
 Example 1:
@@ -154,7 +154,7 @@ ISSUER="https://accounts.sample.org/"
 
 Example 2:
 ```bash
-ISSUER="http://localhost:8080/realms/ridt"
+ISSUER="http://localhost:8080/realms/iat"
 ```
 
 Setting this variable is **required**.
@@ -162,7 +162,7 @@ Setting this variable is **required**.
 
 #### Token Validity Period
 
-The Remote ID Token's default validity period in seconds.
+The ID Assertion Token's default validity period in seconds.
 
 Default Value: `3600` (1 hour).
 
@@ -174,7 +174,7 @@ DEFAULT_TOKEN_PERIOD=3600
 
 #### Maximum Token Validity Period
 
-The Remote ID Token's maximum validity period in seconds.
+The ID Assertion Token's maximum validity period in seconds.
 If the requested token period is longer than this value, this value is used.
 
 Default Value: `2592000` (30 days).
@@ -218,7 +218,7 @@ This section provides some hints how to improve the security of the deployment.
 
 #### 1. Use Containers
 
-The container image of the RIDT endpoint is provided on [DockerHub (external URL)](https://hub.docker.com/r/jonasprimbs/oidc-e2ea-server).
+The container image of the IAT endpoint is provided on [DockerHub (external URL)](https://hub.docker.com/r/jonasprimbs/oidc-e2ea-server).
 
 Follow the instructions there to deploy the container or use the Docker Compose file [here](./docker-compose.yaml) to run a predefined composition with [Keycloak (external URL)](https://www.keycloak.org/) as OpenID Provider.
 
@@ -258,7 +258,7 @@ Execute the following command:
 bash ./generate-secrets.sh
 ```
 
-This will randomly generate all usernames, passwords, and private keys which are unique for your installation and store them in the new directory `.secrets` in the repository.
+This will randomly generate all usernames, passwords, and private keys which are unique for your installation and store them in the new directory `.secrets/` and a `.env` file in the repository.
 
 
 ### 3. Configure Deployment
@@ -266,7 +266,6 @@ This will randomly generate all usernames, passwords, and private keys which are
 Go to the generated `/.env` file and configure the following parameters:
 
 - `OP_HOST=<your-hostname>` the host/domain name of your server. Default is `op.localhost`.
-- `REALM_NAME=<your-realm-name>` the name of your preferred Keycloak realm. Default is `ridt`.
 
 For a local deployment, you can leave these settings at default.
 
@@ -284,57 +283,53 @@ This might take a while to download all related container images.
 
 ### 5. Setup OpenID Provider
 
+This section describes how to setup the Keycloak OpenID Provider to make it ready to issue ID Assertion Tokens.
+
 
 #### 5.1. Login to Keycloak Admin Console
 
-Open your browser and go to [http://op.localhost/admin/ (external URL)](http://op.localhost/admin/) and *sign in* with the credentials generated in the following files:
+Open your browser and go to `http://<your-hostname>/admin/` where `<your-hostname>` is your configured hostname.
+By default, this is [http://op.localhost/admin](http://op.localhost/admin).
+Then *sign in* with the credentials generated in the following files:
 - Username: `/.secrets/op_username.txt`
 - Password: `/.secrets/op_password.txt`
 
-
-#### 5.2. Create Realm
-
-Create a new realm called `ridt` as follows:
-
-1. Hover the *Master* realm in the navigation bar and click *Add Realm*.
-2. Enter the realm *name* `ridt`.
-3. Click *Create*.
+*If you experience a* **Bad Gateway** *error, wait for up to one minute until you Keycloak instance is ready!*
 
 
-#### 5.3. Import Realm Settings
+#### 5.2. Switch to Realm
 
-Import the realm settings as follows:
-
-1. In your new test realm, go to *Manage* > *Import*.
-2. Click on *Select file* and select the file `/keycloak/realm-export.json`.
-3. Click *Import*.
+On the top left, click the dropdown menu and select the realm `iat`:
+![Screenshot of how to switch to realm 'iat'](./images/01_switch_realm.png)
 
 
-#### 5.4. Import Private Key
+#### 5.3. Import Private Key
 
-Import the private key as follows:
+Import the generated private key as follows:
 
-1. In your new test realm, go to *Configure* > *Realm Settings* > *Keys* > *Providers*.
-2. On top of the table, open the dropdown menu *Add keystore...* and select *rsa*.
-3. Enter the *priority* `101`.
-4. As *Private RSA Key*, *Select file* `/.secrets/private.pem`.
-5. Click *Save*.
-6. In *Configure* > *Realm Settings* > *Keys* > *Active*, copy the *Kid* of the new RSA key with priority `101` and paste it to the file `/.secrets/ridt.env` as value for the parameter `KID`, e.g., `KID=rojPQoDRx_DD-DFs7y45wDLl5T8b9VmX6iQapIK6cRE`.
+ 1. Go to *Configure* > *Realm settings* > *Keys* > *Providers*.
+ 2. In *Add provider*, select the option *rsa*.
+    ![Screenshot of how to add an RSA key provider](./images/02_add_rsa.png)
+ 3. In field *Private RSA Key*, select *Browse...* and select the generate `private.pem` private key file in the `/.secrets/` directory of the cloned repository.
+ 4. Click *Save* to store the changes.
+    ![Screenshot of how to save the RSA key provider](./images/03_save_rsa.png)
 
 
-#### 5.5. Create Test User
+#### 5.4. Create Test User
 
 Create a new test user as follows:
 
-1. In your new test realm, go to *Manage* > *Users*.
-2. On top of the table, click the *Add user* button.
-3. Enter a *username*, e.g., `test`.
-4. It is recommended that you also enter an *Email* address, a *First Name*, and a *Last Name*.
-5. Click *Save*.
-6. In your new user, go to the *Credentials* tab.
-7. Set a *Password*, re-enter the *Password Confirmation*, and set *Temporary* to `OFF`.
-8. Then click *Set Password*.
-9. Apply with *Set password*.
+ 1. Go to *Manage* > *Users* > *User list* > *Create new user*.
+    ![Screenshot of how to create a new user](./images/04_create_user.png)
+ 2. Insert at least a *Username*.
+ 3. *Create* the user.
+    ![Screenshot of how to save the new user](./images/05_save_user.png)
+ 4. In the tab *Credentials*, click *Set password*.
+    ![Screenshot of how to set a password for the new user](./images/06_set_password.png)
+ 5. Insert a *Password*, repeat it in *Password confirmation*, and set *Temporary* to `off`.
+    Then click *Save*.
+    ![Screenshot of how to save the password for the new user](./images/07_save_password.png)
+ 6. Confirm the dialog by clicking *Save password*.
 
 
 ### 6. Configure Deployment Mode
@@ -342,7 +337,7 @@ Create a new test user as follows:
 This step depends on your intention why you run this deployment.
 
 - **Testing**: Choose this mode if you want to just run the deployment for testing purposes.
-- **Development**: Choose this mode if you want to change the implementation of the RIDT endpoint application.
+- **Development**: Choose this mode if you want to change the implementation of the IAT endpoint application.
 
 
 #### 6.1. Test Deployment
@@ -350,8 +345,8 @@ This step depends on your intention why you run this deployment.
 *Do this step only if you want to run this deployment for **testing** purposes!*
 
 1. Go to `/docker-compose.yaml`.
-2. Uncomment line 61 (`image` attribute in service `ridt`).
-3. Comment line 64 to 66 (`build` attribute in service `ridt`).
+2. Uncomment line 61 (`image` attribute in service `iat`).
+3. Comment line 64 to 66 (`build` attribute in service `iat`).
 
 
 #### 6.2. Development Deployment
@@ -359,8 +354,8 @@ This step depends on your intention why you run this deployment.
 *Do this step only if you want to run this deployment for **development** purposes!*
 
 1. Go to `/docker-compose.yaml`.
-2. Make sure that line 61 (`image` attribute in service `ridt`) is commented out.
-3. Make sure that line 64 to 66 (`build` attribute in service `ridt`) are not commented.
+2. Make sure that line 61 (`image` attribute in service `iat`) is commented out.
+3. Make sure that line 64 to 66 (`build` attribute in service `iat`) are not commented.
 
 
 ### 7. Restart Infrastructure
@@ -420,14 +415,14 @@ and the following payload (without comments):
 {
   "iss": "postman", // The client ID.
   "sub": "9bbaa2f7-69a9-4eae-b6b8-94fc660112fc",  // The user's unique identifier. In Keycloak, this is a UUID which is displayed in the Users menu.
-  "aud": "http://op.localhost/realms/ridt", // The OpenID Provider's URL = issuer of the Remote ID Token.
+  "aud": "http://op.localhost/realms/iat", // The OpenID Provider's URL = issuer of the ID Assertion Token.
   "iat": 1659355205,  // Unix timestamp when the token was issued.
   "nbf": 1659355205,  // Unix timestamp when the token becomes valid.
   "exp": 1669355235,  // Unix timestamp when the token expires.
   "nonce": "VjfU46Z5ykIhn7jJzqZoWK+paq63EKuH",  // A random nonce.
-  "token_claims": "name email email_verified",  // The requested identity claims for the Remote ID Token.
-  "token_lifetime": 3600, // The requested lifetime of the Remote ID Token.
-  "token_nonce": "Bjxq27FUlB0XAW2ib+Zs6s57RQrcmUxA" // A random nonce to set into the Remote ID Token.
+  "token_claims": "name email email_verified",  // The requested identity claims for the ID Assertion Token.
+  "token_lifetime": 3600, // The requested lifetime of the ID Assertion Token.
+  "token_nonce": "Bjxq27FUlB0XAW2ib+Zs6s57RQrcmUxA" // A random nonce to set into the ID Assertion Token.
 }
 ```
 
@@ -554,8 +549,8 @@ Therefore, you must authorize Postman as follows:
    3. In *Configure New Token* > *Configuration Options* insert the following values:
        - *Grant Type*: `Authorization Code (With PKCE)`
        - *Callback URL*: `https://oauth.pstmn.io/v1/callback` and tick *Authorize using browser*.
-       - *Auth URL*: `https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/auth`
-       - *Access Token URL*: `https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/token`
+       - *Auth URL*: `https://op.oidc-e2e.primbs.dev/realms/iat/protocol/openid-connect/auth`
+       - *Access Token URL*: `https://op.oidc-e2e.primbs.dev/realms/iat/protocol/openid-connect/token`
        - *Client ID*: `postman`
    4. Click *Get New Access Token*.
    5. *Sign In* to your test user account, if requested.
@@ -571,8 +566,8 @@ Therefore, you must authorize Postman as follows:
    3. In *Configure New Token* > *Configuration Options* insert the following values:
        - *Grant Type*: `Authorization Code (With PKCE)`
        - *Callback URL*: `https://oauth.pstmn.io/v1/callback` and tick *Authorize using browser*.
-       - *Auth URL*: `http://op.localhost/realms/ridt/protocol/openid-connect/auth`
-       - *Access Token URL*: `http://op.localhost/realms/ridt/protocol/openid-connect/token`
+       - *Auth URL*: `http://op.localhost/realms/iat/protocol/openid-connect/auth`
+       - *Access Token URL*: `http://op.localhost/realms/iat/protocol/openid-connect/token`
        - *Client ID*: `postman`
    4. Click *Get New Access Token*.
    5. *Sign In* to your test user account, if requested.
@@ -586,7 +581,7 @@ Now you can perform requests to the server as follows:
   <summary><b>For Public Authorization Server</b></summary>
 
    1. Select the HTTP Method *POST*.
-   2. Insert the URL `https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/userinfo/ridt`.
+   2. Insert the URL `https://op.oidc-e2e.primbs.dev/realms/iat/protocol/openid-connect/userinfo/iat`.
    3. Go to the *Body* tab and insert the Token Request JWT as *raw*.
    4. Click *Send*.
 
@@ -596,7 +591,7 @@ Now you can perform requests to the server as follows:
   <summary><b>For Local Authorization Server</b></summary>
 
    1. Select the HTTP Method *POST*.
-   2. Insert the URL `http://op.localhost/realms/ridt/protocol/openid-connect/userinfo/ridt`.
+   2. Insert the URL `http://op.localhost/realms/iat/protocol/openid-connect/userinfo/iat`.
    3. Go to the *Body* tab and insert the Token Request JWT as *raw*.
    4. Click *Send*.
 
