@@ -21,18 +21,18 @@ This section provides an introduction to the architecture and the configuration 
 The following figure shows the overall architecture how to use the provided ID Assertion Token (IAT) Endpoint with any OpenID Provider implementation.
 
 ```
-                                                     +---------+                +----------+           +----------+
-   /*                                                |         |       *        |  OpenID  |           |   User   |
-  -------------------------------------------------> |         |--------------->| Provider | <-------> | Database |
-                                                     |         |                +----------+           +----------+
-                                                     |         |                  ^
-                                                     | Reverse |                  |
-                                                     |  Proxy  |                  | /realms/iat/protocol/openid-connect/userinfo
-                                                     |         |                  |
-                                                     |         |                +----------+
-   /realms/iat/protocol/openid-connect/userinfo/iat  |         |       /        |   IAT    |
-  -------------------------------------------------> |         |--------------->| Endpoint |
-                                                     +---------+                +----------+
+                                  +---------+                +----------+           +----------+
+   /*                             |         |       *        |  OpenID  |           |   User   |
+  ------------------------------> |         |--------------->| Provider | <-------> | Database |
+                                  |         |                +----------+           +----------+
+                                  |         |                  ^
+                                  | Reverse |                  | /realms/iat/protocol/openid-
+                                  |  Proxy  |                  |   connect/userinfo
+                                  |         |                  |
+   /realms/iat/protocol/openid-   |         |                +----------+
+       connect/userinfo/iat       |         |       /        |   IAT    |
+  ------------------------------> |         |--------------->| Endpoint |
+                                  +---------+                +----------+
 ```
 
 The Docker Compose composition provided [here](./docker-compose.yaml) uses the following implementations:
