@@ -32,7 +32,7 @@ services:
       - userdb:/var/lib/postgresql/data                           # Mount PostgreSQL data to shared Docker Volume 'userdb'
   # OpenID Provider (Keycloak):
   op:
-    image: quay.io/keycloak/keycloak:18.0                         # Use Keycloak as OpenID Provider
+    image: quay.io/keycloak/keycloak:20.0                         # Use Keycloak as OpenID Provider
     restart: unless-stopped                                       # Restore last on/off state after restart
     depends_on:
       - proxy                                                     # Keycloak requires running reverse proxy
@@ -41,22 +41,23 @@ services:
       - traefik.enable=true                                       # Enable Traefik reverse proxy exposure
       - traefik.http.routers.op.entrypoints=web                   # Enable exposure via HTTP entrypoint 'web'
       - traefik.http.routers.op.rule=Host(`${OP_HOST}`)           # Specify routing via hostname provided in environment variable 'OP_HOST'
-      - traefik.http.routers.op.priority=1                        # Set priority low (traefik.http.routers.ridt.priority must be higher)
+      - traefik.http.routers.op.priority=1                        # Set priority low (traefik.http.routers.iat.priority must be higher)
     environment:
       KC_DB: postgres                                             # Use a PostgreSQL database
-      KC_DB_URL_HOST: db                                          # Specify hostname of PostgreSQL database ('db' = name of Keycloak Database service)
-      KC_DB_URL_PORT: 5432                                        # Specify port of PostgreSQL database (default: 5432)
-      KC_DB_URL_DATABASE: keycloak                                # Specify name of PostgreSQL database (must be same as POSTGRES_DB of Keycloak Database service)
-      PROXY_ADDRESS_FORWARDING: TRUE                              # Configure Keycloak to run behind a reverse proxy
+      KC_DB_URL: jdbc:postgresql://db:5432/keycloak               # Specify JDBC URL to the PostgreSQL database ('db' = name of Keycloak Database service, 'keycloak' must be POSTGRES_DB of the Keycloak Database service)
+      KC_PROXY: edge                                              # Configure Keycloak to run behind a reverse proxy with unencrypted HTTP between proxy and Keycloak
+
     env_file:
       - ./.secrets/op.env                                         # Include secrets from generated environment variables
     command:
-      - "start-dev"                                               # Run Keycloak in development mode
+      - "start-dev --hostname-strict=false --import-realm"        # Run Keycloak in development mode
     secrets:
       - db_username                                               # Use shared Docker Secret 'db_username'
       - db_password                                               # Use shared Docker Secret 'db_password'
-  # RIDT endpoint (this Go application):
-  ridt:
+    volumes:
+      - ./keycloak/realms:/opt/keycloak/data/import:ro
+  # IAT endpoint (this Go application):
+  iat:
     # For testing:
     #image: jonasprimbs/oidc-e2ea-server:latest                    # Use latest image from Docker Hub
 
@@ -68,31 +69,31 @@ services:
     # For both:
     restart: unless-stopped                                       # Restore last on/off state after restart
     depends_on:
-      - proxy                                                     # RIDT endpoint requires running reverse proxy
-      - op                                                        # RIDT endpoint requires running OpenID Provider
+      - proxy                                                     # IAT endpoint requires running reverse proxy
+      - op                                                        # IAT endpoint requires running OpenID Provider
     labels:
       - traefik.enable=true                                       # Enable Traefik reverse proxy exposure
-      - traefik.http.routers.ridt.entrypoints=web                 # Enable exposure via HTTP entrypoint 'web'
+      - traefik.http.routers.iat.entrypoints=web                 # Enable exposure via HTTP entrypoint 'web'
       - >-                                                        # Specify routing via hostname provided in environment variable 'OP_HOST' and append it to userinfo endpoint
-        traefik.http.routers.ridt.rule=(Host(`${OP_HOST}`) &&
-        PathPrefix(`/realms/${REALM_NAME}/protocol/openid-connect/userinfo/ridt`))
-      - traefik.http.routers.ridt.priority=2                      # Set priority high (traefik.http.routers.op.priority must be lower)
-      - traefik.http.routers.ridt.middlewares=ridt@docker         # Include 'ridt' middleware from Docker labels below 
-      - >-                                                        # Remove .../userinfo/ridt path from request
-        traefik.http.middlewares.ridt.replacepathregex.regex=^/realms/${REALM_NAME}/protocol/openid-connect/userinfo/ridt(.*)
-      - >-                                                        # Forward only path after .../userinfo/ridt (marked with '(.*)') in request to RIDT endpoint
-        traefik.http.middlewares.ridt.replacepathregex.replacement=$$1
+        traefik.http.routers.iat.rule=(Host(`${OP_HOST}`) &&
+        PathPrefix(`/realms/iat/protocol/openid-connect/userinfo/iat`))
+      - traefik.http.routers.iat.priority=2                      # Set priority high (traefik.http.routers.op.priority must be lower)
+      - traefik.http.routers.iat.middlewares=iat@docker         # Include 'iat' middleware from Docker labels below 
+      - >-                                                        # Remove .../userinfo/iat path from request
+        traefik.http.middlewares.iat.replacepathregex.regex=^/realms/iat/protocol/openid-connect/userinfo/iat(.*)
+      - >-                                                        # Forward only path after .../userinfo/iat (marked with '(.*)') in request to IAT endpoint
+        traefik.http.middlewares.iat.replacepathregex.replacement=$$1
     environment:
       KEY_FILE: /run/secrets/op_private_key                       # Set private key file to Docker Secret 'op_private_key'
-      ALG: RS256                                                  # Configure RSA with SHA256 (RS256) as signature algorithm for Remote ID Tokens
+      ALG: RS256                                                  # Configure RSA with SHA256 (RS256) as signature algorithm for ID Assertion Tokens
       USERINFO: >-                                                # Configure userinfo endpoint ('op' is the Docker-internal hostname of OpenID Provider service)
-        http://op:8080/realms/${REALM_NAME}/protocol/openid-connect/userinfo
-      ISSUER: http://op.localhost/realms/${REALM_NAME}            # Configure issuer of issued Remote ID Tokens
-      DEFAULT_TOKEN_PERIOD: 3600                                  # Configure the default lifetime of issued Remote ID Tokens in seconds (3600s = 1h)
-      MAX_TOKEN_PERIOD: 2592000                                   # Configure the maximum lifetime of issued Remote ID Tokens in seconds (2592000s = 30d)
-      PORT: 8080                                                  # Configure the internal port on which the RIDT endpoint is listening
+        http://op:8080/realms/iat/protocol/openid-connect/userinfo
+      ISSUER: http://${OP_HOST}/realms/iat              # Configure issuer of issued ID Assertion Tokens
+      DEFAULT_TOKEN_PERIOD: 3600                                  # Configure the default lifetime of issued ID Assertion Tokens in seconds (3600s = 1h)
+      MAX_TOKEN_PERIOD: 2592000                                   # Configure the maximum lifetime of issued ID Assertion Tokens in seconds (2592000s = 30d)
+      PORT: 8080                                                  # Configure the internal port on which the IAT endpoint is listening
     env_file:
-      - ./.secrets/ridt.env                                       # Include secrets from generated environment variables
+      - ./.secrets/iat.env                                       # Include secrets from generated environment variables
     secrets:
       - op_private_key                                            # Use shared Docker Secret 'op_private_key'
 
