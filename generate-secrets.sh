@@ -1,10 +1,12 @@
+#!/bin/bash
+
 SECRETS_DIR="./.secrets/"
 PRIVATE_KEY_FILE="${SECRETS_DIR}private.pem"
 DB_USERNAME_FILE="${SECRETS_DIR}db_username.txt"
 DB_PASSWORD_FILE="${SECRETS_DIR}db_password.txt"
 OP_USERNAME_FILE="${SECRETS_DIR}op_username.txt"
 OP_PASSWORD_FILE="${SECRETS_DIR}op_password.txt"
-RIDT_ENV_FILE="${SECRETS_DIR}ridt.env"
+IAT_ENV_FILE="${SECRETS_DIR}iat.env"
 OP_ENV_FILE="${SECRETS_DIR}op.env"
 ENV_FILE=".env"
 
@@ -41,12 +43,11 @@ then
     echo "KEYCLOAK_ADMIN_PASSWORD=$(cat $OP_PASSWORD_FILE)" >> "$OP_ENV_FILE"
 fi
 
-# Write empty key ID to ridt.env file
-[ ! -f "$RIDT_ENV_FILE" ] && echo "KID=" > "$RIDT_ENV_FILE"
+# Write empty key ID to iat.env file
+[ ! -f "$IAT_ENV_FILE" ] && echo "KID=" > "$IAT_ENV_FILE"
 
 # Write default hostname and default realm name to .env file
 if [ ! -f "$ENV_FILE" ]
 then
     echo "OP_HOST=op.localhost" > $ENV_FILE
-    echo "REALM_NAME=ridt" >> $ENV_FILE
 fi

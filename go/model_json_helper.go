@@ -1,4 +1,4 @@
-package ridt
+package iat
 
 import (
 	"errors"

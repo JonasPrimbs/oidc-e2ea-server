@@ -1,31 +1,30 @@
 openapi: 3.0.3
 info:
-  title: OIDC RIDT Userinfo Endpoint
-  description: Endpoint for OpenID Connect's Remote ID Token endpoint for userinfo.
-  version: 0.2.0
+  title: OIDC ID Assertion Token Userinfo Endpoint
+  description: Endpoint for OpenID Connect's ID Assertion Token endpoint for userinfo.
+  version: 0.3.0
 servers:
-- url: https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/userinfo/ridt
-- url: http://op.localhost/realms/ridt/protocol/openid-connect/userinfo/ridt
+- url: https://op.oidc-e2e.primbs.dev/realms/iat/protocol/openid-connect/userinfo/iat
+- url: http://op.localhost/realms/iat/protocol/openid-connect/userinfo/iat
 paths:
   /:
     post:
-      summary: Request a new RIDT
-      description: Request a new Remote ID Token
-      operationId: genRidt
+      summary: Request a new IAT
+      description: Request a new ID Assertion Token
+      operationId: genIat
       requestBody:
-        description: Authenticate and send request parameters for a new Remote ID
-          Token.
+        description: Authenticate and send request parameters for a new ID Assertion Token.
         content:
           application/jwt:
             schema:
-              $ref: '#/components/schemas/RemoteIdTokenRequestJwt'
+              $ref: '#/components/schemas/IdAssertionTokenRequestJwt'
         required: true
       responses:
         "201":
           description: |
             **Created**
 
-            Returns the generated Remote ID Token with additional information about it.
+            Returns the generated ID Assertion Token with additional information about it.
           content:
             application/json:
               schema:
@@ -105,9 +104,9 @@ paths:
         - profile
         - email
     options:
-      summary: Options for RIDT
-      description: Return Options for the Remote ID Token Endpoint to avoid CORS errors.
-      operationId: ridtOptions
+      summary: Options for IAT
+      description: Return Options for the ID Assertion Token Endpoint to avoid CORS errors.
+      operationId: iatOptions
       responses:
         "204":
           description: |
@@ -154,7 +153,7 @@ components:
           type: string
           description: More detailed description
       description: Information about ocurred error.
-    RemoteIdTokenRequestJwt:
+    IdAssertionTokenRequestJwt:
       type: string
       description: |
         A JSON Web Token (JWT) which MUST
@@ -174,30 +173,30 @@ components:
       example: eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6ImNYUThiZGVOZWVTd2ZMa0h6TWZBVUZySGxMWFpXdkpybW9NMnNDUEdVbmciLCJ5IjoiN0Rwd21Pb0hJbmQwUWNSRVJUS1pBQ2k5YndzYTVnR0tER3hGeG00OEdSQSJ9fQ.eyJpc3MiOiJjbGllbnQuZXhhbXBsZS5vcmciLCJzdWIiOiJqb2huLnNtaXRoQGFjY291bnRzLmV4YW1wbGUub3JnIiwiYXVkIjoiaHR0cHM6Ly9hY2NvdW50cy5leGFtcGxlLm9yZy8iLCJpYXQiOjE2NTkzNTUyMDUsIm5iZiI6MTY1OTM1NTIwNSwiZXhwIjoxNjU5MzU1MjM1LCJub25jZSI6IlZqZlU0Nlo1eWtJaG43akp6cVpvV0srcGFxNjNFS3VIIiwidG9rZW5fY2xhaW1zIjoibmFtZSBlbWFpbCBlbWFpbF92ZXJpZmllZCIsInRva2VuX2xpZmV0aW1lIjozNjAwLCJ0b2tlbl9ub25jZSI6IkJqeHEyN0ZVbEIwWEFXMmliK1pzNnM1N1JRcmNtVXhBIn0.Z6uoiakqd7MAAJkQ8Bry6SHrp0dQJyd5PWBgsu1EJMHBygDfB1pC_UDiakcaB5QO6-Ec3eYkNlztTVw_XBR0Tg
     IatResponse:
       required:
-      - remote_id_token
+      - id_assertion_token
       type: object
       properties:
-        remote_id_token:
-          $ref: '#/components/schemas/RemoteIdToken'
+        id_assertion_token:
+          $ref: '#/components/schemas/IdAssertionToken'
         expires_in:
           type: integer
-          description: Number of seconds until the Remote ID Token expires.
+          description: Number of seconds until the ID Assertion Token expires.
           format: int32
           minimum: 0
           maximum: 2592000
           example: 3600
         claims:
           type: string
-          description: Space delimited claims provided in the Remote ID Token.
+          description: Space delimited claims provided in the ID Assertion Token.
           example: sub name email email_verified
       example:
         claims: sub name email email_verified
-        remote_id_token: eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCtEUE9QIiwia2lkIjoxfQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmV4YW1wbGUub3JnLyIsInN1YiI6ImpvaG4uc21pdGhAYWNjb3VudHMuZXhhbXBsZS5vcmciLCJpYXQiOjE2NTkzNTUyMDUsIm5iZiI6MTY1OTM1NTIwNSwiZXhwIjoxNjU5MzU4ODA1LCJub25jZSI6IlZqZlU0Nlo1eWtJaG43akp6cVpvV0srcGFxNjNFS3VIIiwiY25mIjp7Imp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6ImNYUThiZGVOZWVTd2ZMa0h6TWZBVUZySGxMWFpXdkpybW9NMnNDUEdVbmciLCJ5IjoiN0Rwd21Pb0hJbmQwUWNSRVJUS1pBQ2k5YndzYTVnR0tER3hGeG00OEdSQSJ9fSwibmFtZSI6IkpvaG4gU21pdGgiLCJlbWFpbCI6ImpvaG4uc21pdGhAbWFpbC5zYW1wbGUub3JnIiwiZW1haWxfdmVyaWZpZWQiOnRydWV9.TEIehA9Xzmo72QoWMTwlkHA2FzypvGq8mAnGyJLD7H3TAYodrMzJnqyTaU7N36Qij2w5-8IpoPIzahGoKC6J_w
+        id_assertion_token: eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCtEUE9QIiwia2lkIjoxfQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmV4YW1wbGUub3JnLyIsInN1YiI6ImpvaG4uc21pdGhAYWNjb3VudHMuZXhhbXBsZS5vcmciLCJpYXQiOjE2NTkzNTUyMDUsIm5iZiI6MTY1OTM1NTIwNSwiZXhwIjoxNjU5MzU4ODA1LCJub25jZSI6IlZqZlU0Nlo1eWtJaG43akp6cVpvV0srcGFxNjNFS3VIIiwiY25mIjp7Imp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6ImNYUThiZGVOZWVTd2ZMa0h6TWZBVUZySGxMWFpXdkpybW9NMnNDUEdVbmciLCJ5IjoiN0Rwd21Pb0hJbmQwUWNSRVJUS1pBQ2k5YndzYTVnR0tER3hGeG00OEdSQSJ9fSwibmFtZSI6IkpvaG4gU21pdGgiLCJlbWFpbCI6ImpvaG4uc21pdGhAbWFpbC5zYW1wbGUub3JnIiwiZW1haWxfdmVyaWZpZWQiOnRydWV9.TEIehA9Xzmo72QoWMTwlkHA2FzypvGq8mAnGyJLD7H3TAYodrMzJnqyTaU7N36Qij2w5-8IpoPIzahGoKC6J_w
         expires_in: 3600
-    RemoteIdToken:
+    IdAssertionToken:
       type: string
       description: |
-        **Remote ID Token** as `jwt+dpop` which MUST
+        **ID Assertion Token** as `jwt+dpop` which MUST
           - contain a JWK Key ID of the OpenID Provider's key pair which is used for signing this token (`"kid": <key-id>`) in the JWT header
           - be issued by the OpenID Provider (`"iss": "<op-id>"`)
           - have an issued at date (`"iat": <issuance-time>`)
@@ -323,8 +322,8 @@ components:
       type: oauth2
       flows:
         authorizationCode:
-          authorizationUrl: https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/auth
-          tokenUrl: https://op.oidc-e2e.primbs.dev/realms/ridt/protocol/openid-connect/token
+          authorizationUrl: https://op.oidc-e2e.primbs.dev/realms/iat/protocol/openid-connect/auth
+          tokenUrl: https://op.oidc-e2e.primbs.dev/realms/iat/protocol/openid-connect/token
           scopes:
             openid: |
               **General OpenID Connect authorization**
@@ -356,8 +355,8 @@ components:
       type: oauth2
       flows:
         authorizationCode:
-          authorizationUrl: http://op.localhost/realms/ridt/protocol/openid-connect/auth
-          tokenUrl: http://op.localhost/realms/ridt/protocol/openid-connect/token
+          authorizationUrl: http://op.localhost/realms/iat/protocol/openid-connect/auth
+          tokenUrl: http://op.localhost/realms/iat/protocol/openid-connect/token
           scopes:
             openid: |
               **General OpenID Connect authorization**

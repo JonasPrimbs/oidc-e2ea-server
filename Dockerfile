@@ -18,8 +18,8 @@ ENV GOOS=linux
 # Download dependencies
 RUN go get -d -v ./...
 
-# Compile application to single binary file 'ridt'
-RUN go build -a -ldflags '-linkmode external -extldflags "-static"' -o /go/src/ridt
+# Compile application to single binary file 'iat'
+RUN go build -a -ldflags '-linkmode external -extldflags "-static"' -o /go/src/iat
 
 
 # Generate runtime container
@@ -29,7 +29,7 @@ FROM scratch AS runtime
 WORKDIR /
 
 # Copy compiled binary from build container
-COPY --from=build /go/src/ridt /ridt
+COPY --from=build /go/src/iat /iat
 
 # Set default configuration parameters
 ENV ALG="ES256"
@@ -42,4 +42,4 @@ ENV DB_SQLITE_FILE="/config/db.sqlite"
 EXPOSE ${PORT}/tcp
 
 # Define the binary as the entrypoint
-ENTRYPOINT ["/ridt"]
+ENTRYPOINT ["/iat"]
