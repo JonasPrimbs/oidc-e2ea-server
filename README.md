@@ -25,8 +25,10 @@ The following figure shows the overall architecture how to use the provided ID A
    /*                                                |         |       *        |  OpenID  |           |   User   |
   -------------------------------------------------> |         |--------------->| Provider | <-------> | Database |
                                                      |         |                +----------+           +----------+
-                                                     | Reverse |
-                                                     |  Proxy  |
+                                                     |         |                  ^
+                                                     | Reverse |                  |
+                                                     |  Proxy  |                  | /realms/iat/protocol/openid-connect/userinfo
+                                                     |         |                  |
                                                      |         |                +----------+
    /realms/iat/protocol/openid-connect/userinfo/iat  |         |       /        |   IAT    |
   -------------------------------------------------> |         |--------------->| Endpoint |
