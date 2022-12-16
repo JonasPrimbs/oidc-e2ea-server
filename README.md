@@ -300,7 +300,8 @@ Then *sign in* with the credentials generated in the following files:
 #### 5.2. Switch to Realm
 
 On the top left, click the dropdown menu and select the realm `iat`:
-![Screenshot of how to switch to realm 'iat'](./images/01_switch_realm.png)
+
+![Screenshot of how to switch to realm 'iat'](./images/switch_realm.png)
 
 
 #### 5.3. Import Private Key
@@ -309,26 +310,51 @@ Import the generated private key as follows:
 
  1. Go to *Configure* > *Realm settings* > *Keys* > *Providers*.
  2. In *Add provider*, select the option *rsa*.
-    ![Screenshot of how to add an RSA key provider](./images/02_add_rsa.png)
+
+    ![Screenshot of how to add an RSA key provider](./images/add_rsa.png)
+
  3. In field *Private RSA Key*, select *Browse...* and select the generate `private.pem` private key file in the `/.secrets/` directory of the cloned repository.
  4. Click *Save* to store the changes.
-    ![Screenshot of how to save the RSA key provider](./images/03_save_rsa.png)
+
+    ![Screenshot of how to save the RSA key provider](./images/save_rsa.png)
 
 
-#### 5.4. Create Test User
+#### 5.4. Configure Private Key
+
+ 1. Go to the file `/.secrets/iat.env`.
+ 2. Copy the *Kid* of your newly generated key of *Type* `RSA` from *Configure* > *Realm settings* > *Keys* > *Key list*.
+
+    ![Screenshot of the Kid of the RSA key](./images/rsa_kid.png)
+
+ 3. Paste the copied *Kid* parameter to the `/.secrets/iat.env` file as value for the key `KID`, e.g.:
+
+```bash
+KID=LZSC7i3j-pIoTMWzQVbShcBc-uDGaWLRFsIDvlmhfs8
+```
+
+
+#### 5.5. Create Test User
 
 Create a new test user as follows:
 
  1. Go to *Manage* > *Users* > *User list* > *Create new user*.
-    ![Screenshot of how to create a new user](./images/04_create_user.png)
+
+    ![Screenshot of how to create a new user](./images/create_user.png)
+
  2. Insert at least a *Username*.
  3. *Create* the user.
-    ![Screenshot of how to save the new user](./images/05_save_user.png)
+
+    ![Screenshot of how to save the new user](./images/save_user.png)
+
  4. In the tab *Credentials*, click *Set password*.
-    ![Screenshot of how to set a password for the new user](./images/06_set_password.png)
+
+    ![Screenshot of how to set a password for the new user](./images/set_password.png)
+
  5. Insert a *Password*, repeat it in *Password confirmation*, and set *Temporary* to `off`.
     Then click *Save*.
-    ![Screenshot of how to save the password for the new user](./images/07_save_password.png)
+
+    ![Screenshot of how to save the password for the new user](./images/save_password.png)
+
  6. Confirm the dialog by clicking *Save password*.
 
 
