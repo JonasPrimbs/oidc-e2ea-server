@@ -1,5 +1,5 @@
 /*
- * OIDC IAT Userinfo Endpoint
+ * OIDC ID Assertion Token Userinfo Endpoint
  *
  * Endpoint for OpenID Connect's ID Assertion Token endpoint for userinfo.
  *
@@ -12,29 +12,23 @@ import (
 	"errors"
 )
 
-type EcCurve string
+type EdCurve string
 
-// List of EcCurves
+// List of EdCurves
 const (
-	P256 EcCurve = "P-256"
-	P384 EcCurve = "P-384"
-	P521 EcCurve = "P-521"
+	ED25519 EdCurve = "Ed25519"
 )
 
-func EcCurveFromName(name string) (EcCurve, bool) {
+func EdCurveFromName(name string) (EdCurve, bool) {
 	switch name {
-	case "P-256":
-		return P256, true
-	case "P-384":
-		return P384, true
-	case "P-521":
-		return P521, true
+	case "Ed25519":
+		return ED25519, true
 	default:
 		return "", false
 	}
 }
 
-func EcCurveFromJson(json map[string]interface{}, attributeName string) (EcCurve, error) {
+func EdCurveFromJson(json map[string]interface{}, attributeName string) (EdCurve, error) {
 	// Read curve name from json object
 	crvString, err := StringFromJson(json, attributeName)
 	if err != nil {
@@ -42,7 +36,7 @@ func EcCurveFromJson(json map[string]interface{}, attributeName string) (EcCurve
 	}
 
 	// Convert attribute value to EcCurve
-	crv, ok := EcCurveFromName(crvString)
+	crv, ok := EdCurveFromName(crvString)
 	if !ok {
 		return crv, errors.New("elliptic curve name '" + string(crv) + "' not supported")
 	}

@@ -1,5 +1,5 @@
 /*
- * OIDC IAT Userinfo Endpoint
+ * OIDC ID Assertion Token Userinfo Endpoint
  *
  * Endpoint for OpenID Connect's ID Assertion Token endpoint for userinfo.
  *
@@ -8,11 +8,9 @@
  */
 package iat
 
-type EcSigningAlgorithm string
+type EdSigningAlgorithm string
 
-// List of EcSigningAlgorithms
+// List of EdSigningAlgorithm
 const (
-	ES256 EcSigningAlgorithm = "ES256"
-	ES384 EcSigningAlgorithm = "ES384"
-	ES512 EcSigningAlgorithm = "ES512"
+	ED_DSA EdSigningAlgorithm = "EdDSA"
 )

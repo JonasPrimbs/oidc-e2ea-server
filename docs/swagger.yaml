@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: OIDC ID Assertion Token Userinfo Endpoint
   description: Endpoint for OpenID Connect's ID Assertion Token endpoint for userinfo.
-  version: 0.3.0
+  version: 0.4.0
 servers:
 - url: https://op.oidc-e2e.primbs.dev/realms/iat/protocol/openid-connect/userinfo/iat
 - url: http://op.localhost/realms/iat/protocol/openid-connect/userinfo/iat
@@ -157,7 +157,7 @@ components:
       type: string
       description: |
         A JSON Web Token (JWT) which MUST
-          - be signed with an asymmetric algorithm (`ES256`, `ES384`, `ES512`, `RS256`, `RS384`, or `RS512` allowed).
+          - be signed with an asymmetric algorithm (`ES256`, `ES384`, `ES512`, `RS256`, `RS384`, `RS512`, or `EdDSA` allowed).
           - have the type `"typ": "JWT"` in the header.
           - contain the client's public key in the JWT header (`"jwk": <public-key>`).
           - be issued by the client (`"iss": "<client-id>"`).
@@ -212,6 +212,7 @@ components:
       oneOf:
         - $ref: '#/components/schemas/JwkEcPublicKey'
         - $ref: '#/components/schemas/JwkRsaPublicKey'
+        - $ref: '#/components/schemas/JwkEdPublicKey'
     JwkEcPublicKey:
       type: object
       required:
@@ -225,7 +226,7 @@ components:
           enum:
             - "EC"
         crv:
-          $ref: '#/components/schemas/EcCurves'
+          $ref: '#/components/schemas/EcCurve'
           examples:
             p256:
               value: "P-256"
@@ -254,6 +255,23 @@ components:
           type: string
           format: byte
         e:
+          type: string
+          format: byte
+    JwkEdPublicKey:
+      type: object
+      required:
+        - kty
+        - crv
+        - x
+      properties:
+        kty:
+          type: string
+          enum:
+            - "OKP"
+        crv:
+          $ref: '#/components/schemas/EcCurve'
+          example: "Ed25519"
+        x:
           type: string
           format: byte
     AppConfiguration:
@@ -290,16 +308,21 @@ components:
           format: uint32
           minimum: 0
           maximum: 2592000
-    EcCurves:
+    EcCurve:
       type: string
       enum:
         - "P-256"
         - "P-384"
         - "P-521"
+    EdCurve:
+      type: string
+      enum:
+        - "Ed25519"
     SigningAlgorithm:
       oneOf:
         - $ref: '#/components/schemas/EcSigningAlgorithm'
         - $ref: '#/components/schemas/RsaSigningAlgorithm'
+        - $ref: '#/components/schemas/EdSigningAlgorithm'
     EcSigningAlgorithm:
       type: string
       enum:
@@ -312,11 +335,16 @@ components:
         - "RS256"
         - "RS384"
         - "RS512"
+    EdSigningAlgorithm:
+      type: string
+      enum:
+        - "EdDSA"
     KeyType:
       type: string
       enum:
         - "EC"
         - "RSA"
+        - "OKP"
   securitySchemes:
     oauth2_public:
       type: oauth2
