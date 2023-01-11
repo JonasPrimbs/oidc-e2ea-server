@@ -91,6 +91,7 @@ Allowed values are:
 - `ES256` for ECDSA using P-256 and SHA-256 (recommended)
 - `ES384` for ECDSA using P-384 and SHA-384
 - `ES512` for ECDSA using P-521 and SHA-512
+- `EdDSA` for Eduard Digital Signing Algorithm using Ed25519 curve
 
 Default Value: `ES256`.
 
