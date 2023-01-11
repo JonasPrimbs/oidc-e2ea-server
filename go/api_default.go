@@ -122,6 +122,15 @@ func Base64ToBigInt(s string) (*big.Int, error) {
 	return i, nil
 }
 
+func Base64ToByteArray(s string) ([]byte, error) {
+	data, err := base64.RawURLEncoding.DecodeString(s)
+	if err != nil {
+		return nil, errors.New("failed to parse base64url encoded byte array '" + s + "': " + err.Error())
+	}
+
+	return data, nil
+}
+
 func Base64ToInt(s string) (int, error) {
 	// Parse base64url encoded string to bytes.
 	data, err := base64.RawURLEncoding.DecodeString(s)
@@ -395,17 +404,17 @@ func RsaPublicKeyFromJson(jwk map[string]interface{}) (*rsa.PublicKey, map[strin
 	return publicKey, publicKeyJwk, nil
 }
 func EdDsaPublicKeyFromJson(jwk map[string]interface{}) (*ed25519.PublicKey, map[string]interface{}, error) {
-	publicKey := new(ed25519.PublicKey)
 	publicKeyJwk := make(map[string]interface{})
 	publicKeyJwk["kty"] = "OKP"
 	publicKeyJwk["crv"] = "Ed25519"
 
 	// Parse x value
-	x, err := BigIntFromJsonBase64(jwk, "x")
+	x, err := ByteArrayFromJsonBase64(jwk, "x")
 	if err != nil {
 		return nil, nil, errors.New("failed to read x value: " + err.Error())
 	}
-	publicKey.X = x
+	var publicKey ed25519.PublicKey
+	publicKey = x
 	xString, err := StringFromJson(jwk, "x")
 	if err != nil {
 		return nil, nil, errors.New("x value not found: " + err.Error())
@@ -413,7 +422,7 @@ func EdDsaPublicKeyFromJson(jwk map[string]interface{}) (*ed25519.PublicKey, map
 	publicKeyJwk["x"] = xString
 
 	// Return public key
-	return publicKey, publicKeyJwk, nil
+	return &publicKey, publicKeyJwk, nil
 }
 
 func PublicKeyFromJwt(token *jwt.Token) (interface{}, map[string]interface{}, error) {

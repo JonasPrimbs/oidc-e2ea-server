@@ -64,10 +64,26 @@ func BigIntFromJsonBase64(json map[string]interface{}, attributeName string) (*b
 		return nil, err
 	}
 
-	// Decode base64 string to integer
+	// Decode base64 string to big integer
 	value, err := Base64ToBigInt(valueString)
 	if err != nil {
-		return nil, errors.New("failed to decode integer: " + err.Error())
+		return nil, errors.New("failed to decode big integer: " + err.Error())
+	}
+
+	return value, nil
+}
+
+func ByteArrayFromJsonBase64(json map[string]interface{}, attributeName string) ([]byte, error) {
+	// Read string value
+	valueString, err := StringFromJson(json, attributeName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Decode base64 string to byte array
+	value, err := Base64ToByteArray(valueString)
+	if err != nil {
+		return nil, errors.New("failed to decode byte array: " + err.Error())
 	}
 
 	return value, nil
