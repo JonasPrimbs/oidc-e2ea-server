@@ -463,7 +463,7 @@ func PublicKeyFromJwt(token *jwt.Token) (interface{}, map[string]interface{}, er
 		if err != nil {
 			return nil, nil, errors.New("failed to parse Ed25519 public key: " + err.Error())
 		}
-		return publicKey, publicKeyJwk, nil
+		return *publicKey, publicKeyJwk, nil
 	// Not supported:
 	default:
 		return nil, nil, errors.New("signing algorithm '" + token.Method.Alg() + "' not supported")
