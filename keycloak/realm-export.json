@@ -1,7 +1,7 @@
 {
   "id": "ad96346a-1b20-417d-9564-281e52b213e9",
-  "realm": "iat",
-  "displayName": "ID Assertion Token Debugging Realm",
+  "realm": "ict",
+  "displayName": "ID Certification Token Debugging Realm",
   "displayNameHtml": "",
   "notBefore": 0,
   "defaultSignatureAlgorithm": "RS256",
@@ -47,7 +47,7 @@
   "failureFactor": 30,
   "defaultRole": {
     "id": "af1dc400-33e8-452e-8a9c-e77468a47b78",
-    "name": "default-roles-iat",
+    "name": "default-roles-ict",
     "description": "${role_default-roles}",
     "composite": true,
     "clientRole": false,
@@ -116,13 +116,13 @@
       "clientId": "account",
       "name": "${client_account}",
       "rootUrl": "${authBaseUrl}",
-      "baseUrl": "/realms/iat/account/",
+      "baseUrl": "/realms/ict/account/",
       "surrogateAuthRequired": false,
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
-        "/realms/iat/account/*"
+        "/realms/ict/account/*"
       ],
       "webOrigins": [],
       "notBefore": 0,
@@ -160,13 +160,13 @@
       "clientId": "account-console",
       "name": "${client_account-console}",
       "rootUrl": "${authBaseUrl}",
-      "baseUrl": "/realms/iat/account/",
+      "baseUrl": "/realms/ict/account/",
       "surrogateAuthRequired": false,
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
-        "/realms/iat/account/*"
+        "/realms/ict/account/*"
       ],
       "webOrigins": [],
       "notBefore": 0,
@@ -386,13 +386,13 @@
       "clientId": "security-admin-console",
       "name": "${client_security-admin-console}",
       "rootUrl": "${authAdminUrl}",
-      "baseUrl": "/admin/iat/console/",
+      "baseUrl": "/admin/ict/console/",
       "surrogateAuthRequired": false,
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
-        "/admin/iat/console/*"
+        "/admin/ict/console/*"
       ],
       "webOrigins": [
         "+"

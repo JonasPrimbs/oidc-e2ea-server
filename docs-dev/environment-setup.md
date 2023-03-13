@@ -69,9 +69,9 @@ Then *sign in* with the credentials generated in the following files:
 
 ### 5.2. Switch to Realm
 
-On the top left, click the dropdown menu and select the realm `iat`:
+On the top left, click the dropdown menu and select the realm `ict`:
 
-![Screenshot of how to switch to realm 'iat'](./images/switch_realm.png)
+![Screenshot of how to switch to realm 'ict'](./images/switch_realm.png)
 
 
 ### 5.3. Import Private Key
@@ -91,15 +91,15 @@ Import the generated private key as follows:
 
 ### 5.4. Configure Private Key
 
- 1. Go to the file `/.secrets/iat.env`.
- 2. Copy the *Kid* of your newly generated key of *Type* `RSA` from *Configure* > *Realm settings* > *Keys* > *Key list*.
+ 1. Go to the file `/.secrets/ict.env`.
+ 2. Copy the *Kid* of your newly generated key of *Type* `rsa` from *Configure* > *Realm settings* > *Keys* > *Key list*.
 
     ![Screenshot of the Kid of the RSA key](./images/rsa_kid.png)
 
- 3. Paste the copied *Kid* parameter to the `/.secrets/iat.env` file as value for the key `KID`, e.g.:
+ 3. Paste the copied *Kid* parameter to the `/.secrets/ict.env` file as value for the key `KID`, e.g.:
 
 ```bash
-KID=LZSC7i3j-pIoTMWzQVbShcBc-uDGaWLRFsIDvlmhfs8
+KID=GFSKUd9yi3LiQhT6HKuU4IOymufp_OIIlG8DmGa8hvs
 ```
 
 
@@ -141,8 +141,8 @@ This step depends on your intention why you run this deployment.
 *Do this step only if you want to run this deployment for **testing** purposes!*
 
 1. Go to `/docker-compose.yaml`.
-2. Uncomment line 61 (`image` attribute in service `iat`).
-3. Comment line 64 to 66 (`build` attribute in service `iat`).
+2. Uncomment line 81 (`image` attribute in service `ict`).
+3. Comment line 84 to 86 (`build` attribute in service `ict`).
 
 
 ### 6.2. Development Deployment
@@ -150,8 +150,8 @@ This step depends on your intention why you run this deployment.
 *Do this step only if you want to run this deployment for **development** purposes!*
 
 1. Go to `/docker-compose.yaml`.
-2. Make sure that line 61 (`image` attribute in service `iat`) is commented out.
-3. Make sure that line 64 to 66 (`build` attribute in service `iat`) are not commented.
+2. Comment line 81 (`image` attribute in service `ict`).
+3. Uncomment line 84 to 86 (`build` attribute in service `ict`).
 
 
 ## 7. Restart Infrastructure
