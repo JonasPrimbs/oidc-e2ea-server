@@ -9,12 +9,15 @@ services:
     restart: unless-stopped                                       # Restore last on/off state after restart
     ports:
       - 80:80                                                     # Open port 80 (HTTP)
+      - 443:443
     command:
       - "--accesslog=true"                                        # Log access for debugging
       - "--entrypoints.web.address=:80"                           # Use port 80 as entypoint 'web'
+      - "--entrypoints.websecure.address=:443"                    # Use port 80 as entypoint 'websecure'
       - "--providers.docker=true"                                 # Enable Docker provider to handle requests to services
       - "--providers.docker.endpoint=unix:///var/run/docker.sock" # Path to docker socket to listen to new services
       - "--providers.docker.exposedbydefault=false"               # Do not expose every service by default
+      - "--serversTransport.insecureSkipVerify=true"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro              # Mount host's docker socket read-only
   # Keycloak Database (PostgreSQL):
@@ -32,7 +35,7 @@ services:
       - userdb:/var/lib/postgresql/data                           # Mount PostgreSQL data to shared Docker Volume 'userdb'
   # OpenID Provider (Keycloak):
   op:
-    image: quay.io/keycloak/keycloak:20.0                         # Use Keycloak as OpenID Provider
+    image: quay.io/keycloak/keycloak:21.0                         # Use Keycloak as OpenID Provider
     restart: unless-stopped                                       # Restore last on/off state after restart
     depends_on:
       - proxy                                                     # Keycloak requires running reverse proxy
@@ -41,12 +44,11 @@ services:
       - traefik.enable=true                                       # Enable Traefik reverse proxy exposure
       - traefik.http.routers.op.entrypoints=web                   # Enable exposure via HTTP entrypoint 'web'
       - traefik.http.routers.op.rule=Host(`${OP_HOST}`)           # Specify routing via hostname provided in environment variable 'OP_HOST'
-      - traefik.http.routers.op.priority=1                        # Set priority low (traefik.http.routers.iat.priority must be higher)
+      - traefik.http.routers.op.priority=1                        # Set priority low (traefik.http.routers.ict.priority must be higher)
     environment:
       KC_DB: postgres                                             # Use a PostgreSQL database
       KC_DB_URL: jdbc:postgresql://db:5432/keycloak               # Specify JDBC URL to the PostgreSQL database ('db' = name of Keycloak Database service, 'keycloak' must be POSTGRES_DB of the Keycloak Database service)
       KC_PROXY: edge                                              # Configure Keycloak to run behind a reverse proxy with unencrypted HTTP between proxy and Keycloak
-
     env_file:
       - ./.secrets/op.env                                         # Include secrets from generated environment variables
     command:
@@ -55,45 +57,102 @@ services:
       - db_username                                               # Use shared Docker Secret 'db_username'
       - db_password                                               # Use shared Docker Secret 'db_password'
     volumes:
-      - ./keycloak/realms:/opt/keycloak/data/import:ro
-  # IAT endpoint (this Go application):
-  iat:
+      - ./keycloak:/opt/keycloak/data/import:ro
+  # OpenID Provider (WSO2 IS):
+  op2:
+    image: wso2/wso2is:5.11.0                                     # Use WSO2 IS as OpenID Provider
+    restart: unless-stopped                                       # Restore last on/off state after restart
+    ports:
+      - 9443:9443
+    depends_on:
+      - proxy                                                     # WSO2 requires running reverse proxy
+    labels:
+      - traefik.enable=true                                       # Enable Traefik reverse proxy exposure
+      - traefik.http.routers.op2.entrypoints=web,websecure        # Enable exposure via HTTP entrypoint 'web' and 'websecure'
+      - traefik.http.routers.op2.rule=Host(`${OP2_HOST}`)         # Specify routing via hostname provided in environment variable 'OP_HOST'
+      - traefik.http.routers.op2.priority=1                       # Set priority low (traefik.http.routers.ict.priority must be higher)
+      - traefik.http.services.op2.loadbalancer.server.scheme=https
+      - traefik.http.services.op2.loadbalancer.server.port=9443
+    volumes:
+      - ./wso2/carbon.xml:/home/wso2carbon/wso2is-5.7.0/repository/conf/carbon.xml:ro
+  # ICT endpoint for Keycloak (this Go application):
+  ict:
     # For testing:
-    #image: jonasprimbs/oidc-e2ea-server:latest                    # Use latest image from Docker Hub
+    image: jonasprimbs/oidc-e2ea-server:latest                    # Use latest image from Docker Hub
 
     # For development:
-    build:
-      context: ./                                                 # Use this repository directory as context
-      dockerfile: Dockerfile                                      # Use 'Dockerfile' from context directory
+    # build:
+    #   context: ./                                                 # Use this repository directory as context
+    #   dockerfile: Dockerfile                                      # Use 'Dockerfile' from context directory
 
     # For both:
     restart: unless-stopped                                       # Restore last on/off state after restart
     depends_on:
-      - proxy                                                     # IAT endpoint requires running reverse proxy
-      - op                                                        # IAT endpoint requires running OpenID Provider
+      - proxy                                                     # ICT endpoint requires running reverse proxy
+      - op                                                        # ICT endpoint requires running OpenID Provider
     labels:
       - traefik.enable=true                                       # Enable Traefik reverse proxy exposure
-      - traefik.http.routers.iat.entrypoints=web                 # Enable exposure via HTTP entrypoint 'web'
+      - traefik.http.routers.ict.entrypoints=web,websecure        # Enable exposure via HTTP entrypoint 'web'
       - >-                                                        # Specify routing via hostname provided in environment variable 'OP_HOST' and append it to userinfo endpoint
-        traefik.http.routers.iat.rule=(Host(`${OP_HOST}`) &&
-        PathPrefix(`/realms/iat/protocol/openid-connect/userinfo/iat`))
-      - traefik.http.routers.iat.priority=2                      # Set priority high (traefik.http.routers.op.priority must be lower)
-      - traefik.http.routers.iat.middlewares=iat@docker         # Include 'iat' middleware from Docker labels below 
-      - >-                                                        # Remove .../userinfo/iat path from request
-        traefik.http.middlewares.iat.replacepathregex.regex=^/realms/iat/protocol/openid-connect/userinfo/iat(.*)
-      - >-                                                        # Forward only path after .../userinfo/iat (marked with '(.*)') in request to IAT endpoint
-        traefik.http.middlewares.iat.replacepathregex.replacement=$$1
+        traefik.http.routers.ict.rule=(Host(`${OP_HOST}`) &&
+        PathPrefix(`/realms/ict/protocol/openid-connect/userinfo/ict`))
+      - traefik.http.routers.ict.priority=2                       # Set priority high (traefik.http.routers.op.priority must be lower)
+      - traefik.http.routers.ict.middlewares=ict@docker           # Include 'ict' middleware from Docker labels below 
+      - >-                                                        # Remove .../userinfo/ict path from request
+        traefik.http.middlewares.ict.replacepathregex.regex=^/realms/ict/protocol/openid-connect/userinfo/ict(.*)
+      - >-                                                        # Forward only path after .../userinfo/ict (marked with '(.*)') in request to ICT endpoint
+        traefik.http.middlewares.ict.replacepathregex.replacement=$$1
     environment:
       KEY_FILE: /run/secrets/op_private_key                       # Set private key file to Docker Secret 'op_private_key'
       ALG: RS256                                                  # Configure RSA with SHA256 (RS256) as signature algorithm for ID Assertion Tokens
       USERINFO: >-                                                # Configure userinfo endpoint ('op' is the Docker-internal hostname of OpenID Provider service)
-        http://op:8080/realms/iat/protocol/openid-connect/userinfo
-      ISSUER: http://${OP_HOST}/realms/iat              # Configure issuer of issued ID Assertion Tokens
+        http://op:8080/realms/ict/protocol/openid-connect/userinfo
+      ISSUER: http://${OP_HOST}/realms/ict                        # Configure issuer of issued ID Assertion Tokens
       DEFAULT_TOKEN_PERIOD: 3600                                  # Configure the default lifetime of issued ID Assertion Tokens in seconds (3600s = 1h)
       MAX_TOKEN_PERIOD: 2592000                                   # Configure the maximum lifetime of issued ID Assertion Tokens in seconds (2592000s = 30d)
-      PORT: 8080                                                  # Configure the internal port on which the IAT endpoint is listening
+      PORT: 8080                                                  # Configure the internal port on which the ICT endpoint is listening
     env_file:
-      - ./.secrets/iat.env                                       # Include secrets from generated environment variables
+      - ./.secrets/ict.env                                        # Include secrets from generated environment variables
+    secrets:
+      - op_private_key                                            # Use shared Docker Secret 'op_private_key'
+  # ICT endpoint for WSO2 (this Go application):
+  ict2:
+    # For testing:
+    image: jonasprimbs/oidc-e2ea-server:latest                    # Use latest image from Docker Hub
+
+    # For development:
+    # build:
+    #   context: ./                                                 # Use this repository directory as context
+    #   dockerfile: Dockerfile                                      # Use 'Dockerfile' from context directory
+
+    # For both:
+    restart: unless-stopped                                       # Restore last on/off state after restart
+    depends_on:
+      - proxy                                                     # ICT endpoint requires running reverse proxy
+      - op                                                        # ICT endpoint requires running OpenID Provider
+    labels:
+      - traefik.enable=true                                       # Enable Traefik reverse proxy exposure
+      - traefik.http.routers.ict2.entrypoints=web,websecure       # Enable exposure via HTTP entrypoint 'web'
+      - >-                                                        # Specify routing via hostname provided in environment variable 'OP_HOST' and append it to userinfo endpoint
+        traefik.http.routers.ict2.rule=(Host(`${OP2_HOST}`) &&
+        PathPrefix(`/ict/protocol/openid-connect/userinfo/ict`))
+      - traefik.http.routers.ict2.priority=2                      # Set priority high (traefik.http.routers.op.priority must be lower)
+      - traefik.http.routers.ict2.middlewares=ict2@docker         # Include 'ict' middleware from Docker labels below 
+      - >-                                                        # Remove .../userinfo/ict path from request
+        traefik.http.middlewares.ict2.replacepathregex.regex=^/ict/protocol/openid-connect/userinfo/ict(.*)
+      - >-                                                        # Forward only path after .../userinfo/ict (marked with '(.*)') in request to ICT endpoint
+        traefik.http.middlewares.ict2.replacepathregex.replacement=$$1
+    environment:
+      KEY_FILE: /run/secrets/op_private_key                       # Set private key file to Docker Secret 'op_private_key'
+      ALG: RS256                                                  # Configure RSA with SHA256 (RS256) as signature algorithm for ID Assertion Tokens
+      USERINFO: >-                                                # Configure userinfo endpoint ('op' is the Docker-internal hostname of OpenID Provider service)
+        https://op2:9443/realms/ict/protocol/openid-connect/userinfo
+      ISSUER: http://${OP2_HOST}/realms/ict                       # Configure issuer of issued ID Assertion Tokens
+      DEFAULT_TOKEN_PERIOD: 3600                                  # Configure the default lifetime of issued ID Assertion Tokens in seconds (3600s = 1h)
+      MAX_TOKEN_PERIOD: 2592000                                   # Configure the maximum lifetime of issued ID Assertion Tokens in seconds (2592000s = 30d)
+      PORT: 8080                                                  # Configure the internal port on which the ICT endpoint is listening
+    env_file:
+      - ./.secrets/ict.env                                        # Include secrets from generated environment variables
     secrets:
       - op_private_key                                            # Use shared Docker Secret 'op_private_key'
 
