@@ -141,8 +141,8 @@ This step depends on your intention why you run this deployment.
 *Do this step only if you want to run this deployment for **testing** purposes!*
 
 1. Go to `/docker-compose.yaml`.
-2. Uncomment line 81 (`image` attribute in service `ict`).
-3. Comment line 84 to 86 (`build` attribute in service `ict`).
+2. Uncomment line 65 (`image` attribute in service `ict`).
+3. Comment line 68 to 70 (`build` attribute in service `ict`).
 
 
 ### 6.2. Development Deployment
@@ -150,8 +150,8 @@ This step depends on your intention why you run this deployment.
 *Do this step only if you want to run this deployment for **development** purposes!*
 
 1. Go to `/docker-compose.yaml`.
-2. Comment line 81 (`image` attribute in service `ict`).
-3. Uncomment line 84 to 86 (`build` attribute in service `ict`).
+2. Comment line 65 (`image` attribute in service `ict`).
+3. Uncomment line 68 to 70 (`build` attribute in service `ict`).
 
 
 ## 7. Restart Infrastructure
