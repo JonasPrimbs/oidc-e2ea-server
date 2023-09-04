@@ -1,6 +1,3 @@
-# Specify Docker-Compose version:
-version: "3.9"
-
 # Shared Docker Services:
 services:
   # Reverse Proxy (Traefik):
@@ -36,8 +33,10 @@ services:
       - userdb:/var/lib/postgresql/data                           # Mount PostgreSQL data to shared Docker Volume 'userdb'
   # OpenID Provider (Keycloak):
   op:
-    image: quay.io/keycloak/keycloak:21.0                         # Use Keycloak as OpenID Provider
+    image: quay.io/keycloak/keycloak:22.0.1                         # Use Keycloak as OpenID Provider
     restart: unless-stopped                                       # Restore last on/off state after restart
+    ports:
+      - 8080:8080
     depends_on:
       - proxy                                                     # Keycloak requires running reverse proxy
       - db                                                        # Keycloak requires running database
@@ -61,13 +60,13 @@ services:
       - ./keycloak:/opt/keycloak/data/import:ro
   # ICT endpoint for Keycloak (this Go application):
   ict:
-    # For testing:
-    image: jonasprimbs/oidc-e2ea-server:latest                    # Use latest image from Docker Hub
+    # # For testing:
+    # image: jonasprimbs/oidc-e2ea-server:latest                    # Use latest image from Docker Hub
 
     # For development:
-    # build:
-    #   context: ./                                                 # Use this repository directory as context
-    #   dockerfile: Dockerfile                                      # Use 'Dockerfile' from context directory
+    build:
+      context: ./                                                 # Use this repository directory as context
+      dockerfile: Dockerfile                                      # Use 'Dockerfile' from context directory
 
     # For both:
     restart: unless-stopped                                       # Restore last on/off state after restart
@@ -79,13 +78,14 @@ services:
       - traefik.http.routers.ict.entrypoints=web,websecure        # Enable exposure via HTTP entrypoint 'web'
       - >-                                                        # Specify routing via hostname provided in environment variable 'OP_HOST' and append it to userinfo endpoint
         traefik.http.routers.ict.rule=(Host(`${OP_HOST}`) &&
-        PathPrefix(`/realms/ict/protocol/openid-connect/userinfo/ict`))
+        PathPrefix(`/realms/ict/protocol/openid-connect/ict`))
       - traefik.http.routers.ict.priority=2                       # Set priority high (traefik.http.routers.op.priority must be lower)
       - traefik.http.routers.ict.middlewares=ict@docker           # Include 'ict' middleware from Docker labels below 
       - >-                                                        # Remove .../userinfo/ict path from request
-        traefik.http.middlewares.ict.replacepathregex.regex=^/realms/ict/protocol/openid-connect/userinfo/ict(.*)
+        traefik.http.middlewares.ict.replacepathregex.regex=^/realms/ict/protocol/openid-connect/ict(.*)
       - >-                                                        # Forward only path after .../userinfo/ict (marked with '(.*)') in request to ICT endpoint
         traefik.http.middlewares.ict.replacepathregex.replacement=$$1
+      # - traefik.http.middlewares.ict.headers.customResponseHeaders.Access-Control-Allow-Origin=http://localhost:4200
     environment:
       KEY_FILE: /run/secrets/op_private_key                       # Set private key file to Docker Secret 'op_private_key'
       ALG: RS256                                                  # Configure RSA with SHA256 (RS256) as signature algorithm for ID Assertion Tokens
@@ -100,138 +100,138 @@ services:
     secrets:
       - op_private_key                                            # Use shared Docker Secret 'op_private_key'
 
-  # Authentik Database (PostgreSQL)
-  db2:
-    image: postgres:15-alpine                                     # Use PostgreSQL on Alpine Linux as database for Authentik
-    restart: unless-stopped                                       # Restore last on/off state after restart
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $$(cat $${POSTGRES_USER})"]
-      start_period: 20s
-      interval: 30s
-      retries: 5
-      timeout: 5s
-    environment:
-      POSTGRES_DB: authentik                                      # Name database 'authentik'
-      POSTGRES_USER_FILE: /run/secrets/db2_username               # Set database username to Docker Secret 'db_username'
-      POSTGRES_PASSWORD_FILE: /run/secrets/db2_password           # Set database password to Docker Secret 'db_password'
-    secrets:
-      - db2_username                                              # Use shared Docker Secret 'db_username'
-      - db2_password                                              # Use shared Docker Secret 'db_password'
-    volumes:
-      - userdb2:/var/lib/postgresql/data                          # Mount PostgreSQL data to shared Docker Volume 'userdb'
-  redis2:
-    image: docker.io/library/redis:7-alpine
-    command: --save 60 1 --loglevel warning
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
-      start_period: 20s
-      interval: 30s
-      retries: 5
-      timeout: 3s
-    volumes:
-      - redis2:/data
-  op2:
-    image: ghcr.io/goauthentik/server:2023.2.3
-    restart: unless-stopped
-    command: server
-    environment:
-      AUTHENTIK_REDIS__HOST: redis2
-      AUTHENTIK_POSTGRESQL__HOST: db2
-      AUTHENTIK_POSTGRESQL__NAME: authentik
-      AUTHENTIK_POSTGRESQL__USER: file:///run/secrets/db2_username
-      AUTHENTIK_POSTGRESQL__PASSWORD: file:///run/secrets/db2_password
-      AUTHENTIK_SECRET_KEY: file:///run/secrets/op2_secret_key
-      AUTHENTIK_ERROR_REPORTING__ENABLED: true
-      AUTHENTIK_HOST: http://op2.localhost
-      AUTHENTIK_INSECURE: true
-      # AUTHENTIK_TOKEN: token-generated-by-authentik
-    labels:
-      - traefik.enable=true
-      - traefik.port=9000
-      - traefik.http.routers.op2.entrypoints=web,websecure         # Enable exposure via HTTP entrypoint 'web' and 'websecure'
-      - traefik.http.routers.op2.rule=Host(`${OP2_HOST}`)          # Specify routing via hostname provided in environment variable 'OP_HOST'
-      - traefik.http.routers.op2.priority=1                        # Set priority low (traefik.http.routers.ict.priority must be higher)
-      - traefik.http.routers.op2.middlewares=op2
-      - traefik.http.middlewares.op2.headers.customResponseHeaders.Access-Control-Allow-Origin=http://localhost:4200
-    secrets:
-      - db2_username                                              # Use shared Docker Secret 'db_username'
-      - db2_password                                              # Use shared Docker Secret 'db_password'
-      - op2_secret_key
-    volumes:
-      - op2_media:/media
-      - op2_templates:/templates
-    ports:
-      - 9000:9000
-      - 9443:9443
-  op2_worker:
-    image: ghcr.io/goauthentik/server:2023.2.3
-    restart: unless-stopped
-    command: worker
-    environment:
-      AUTHENTIK_REDIS__HOST: redis2
-      AUTHENTIK_POSTGRESQL__HOST: db2
-      AUTHENTIK_POSTGRESQL__NAME: authentik
-      AUTHENTIK_POSTGRESQL__USER: file:///run/secrets/db2_username
-      AUTHENTIK_POSTGRESQL__PASSWORD: file:///run/secrets/db2_password
-      AUTHENTIK_SECRET_KEY: file:///run/secrets/op2_secret_key
-      AUTHENTIK_ERROR_REPORTING__ENABLED: true
-    secrets:
-      - db2_username                                              # Use shared Docker Secret 'db_username'
-      - db2_password                                              # Use shared Docker Secret 'db_password'
-      - op2_secret_key
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./.secrets/certs:/certs
-      - op2_media:/media
-      - op2_templates:/templates
-  # ICT endpoint for WSO2 (this Go application):
-  ict2:
-    # For testing:
-    image: jonasprimbs/oidc-e2ea-server:latest                    # Use latest image from Docker Hub
+  # # Authentik Database (PostgreSQL)
+  # db2:
+  #   image: postgres:15-alpine                                     # Use PostgreSQL on Alpine Linux as database for Authentik
+  #   restart: unless-stopped                                       # Restore last on/off state after restart
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $$(cat $${POSTGRES_USER})"]
+  #     start_period: 20s
+  #     interval: 30s
+  #     retries: 5
+  #     timeout: 5s
+  #   environment:
+  #     POSTGRES_DB: authentik                                      # Name database 'authentik'
+  #     POSTGRES_USER_FILE: /run/secrets/db2_username               # Set database username to Docker Secret 'db_username'
+  #     POSTGRES_PASSWORD_FILE: /run/secrets/db2_password           # Set database password to Docker Secret 'db_password'
+  #   secrets:
+  #     - db2_username                                              # Use shared Docker Secret 'db_username'
+  #     - db2_password                                              # Use shared Docker Secret 'db_password'
+  #   volumes:
+  #     - userdb2:/var/lib/postgresql/data                          # Mount PostgreSQL data to shared Docker Volume 'userdb'
+  # redis2:
+  #   image: docker.io/library/redis:7-alpine
+  #   command: --save 60 1 --loglevel warning
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+  #     start_period: 20s
+  #     interval: 30s
+  #     retries: 5
+  #     timeout: 3s
+  #   volumes:
+  #     - redis2:/data
+  # op2:
+  #   image: ghcr.io/goauthentik/server:2023.2.3
+  #   restart: unless-stopped
+  #   command: server
+  #   environment:
+  #     AUTHENTIK_REDIS__HOST: redis2
+  #     AUTHENTIK_POSTGRESQL__HOST: db2
+  #     AUTHENTIK_POSTGRESQL__NAME: authentik
+  #     AUTHENTIK_POSTGRESQL__USER: file:///run/secrets/db2_username
+  #     AUTHENTIK_POSTGRESQL__PASSWORD: file:///run/secrets/db2_password
+  #     AUTHENTIK_SECRET_KEY: file:///run/secrets/op2_secret_key
+  #     AUTHENTIK_ERROR_REPORTING__ENABLED: true
+  #     AUTHENTIK_HOST: http://op2.localhost
+  #     AUTHENTIK_INSECURE: true
+  #     # AUTHENTIK_TOKEN: token-generated-by-authentik
+  #   labels:
+  #     - traefik.enable=true
+  #     - traefik.port=9000
+  #     - traefik.http.routers.op2.entrypoints=web,websecure         # Enable exposure via HTTP entrypoint 'web' and 'websecure'
+  #     - traefik.http.routers.op2.rule=Host(`${OP2_HOST}`)          # Specify routing via hostname provided in environment variable 'OP_HOST'
+  #     - traefik.http.routers.op2.priority=1                        # Set priority low (traefik.http.routers.ict.priority must be higher)
+  #     - traefik.http.routers.op2.middlewares=op2
+  #     - traefik.http.middlewares.op2.headers.customResponseHeaders.Access-Control-Allow-Origin=http://localhost:4200
+  #   secrets:
+  #     - db2_username                                              # Use shared Docker Secret 'db_username'
+  #     - db2_password                                              # Use shared Docker Secret 'db_password'
+  #     - op2_secret_key
+  #   volumes:
+  #     - op2_media:/media
+  #     - op2_templates:/templates
+  #   ports:
+  #     - 9000:9000
+  #     - 9443:9443
+  # op2_worker:
+  #   image: ghcr.io/goauthentik/server:2023.2.3
+  #   restart: unless-stopped
+  #   command: worker
+  #   environment:
+  #     AUTHENTIK_REDIS__HOST: redis2
+  #     AUTHENTIK_POSTGRESQL__HOST: db2
+  #     AUTHENTIK_POSTGRESQL__NAME: authentik
+  #     AUTHENTIK_POSTGRESQL__USER: file:///run/secrets/db2_username
+  #     AUTHENTIK_POSTGRESQL__PASSWORD: file:///run/secrets/db2_password
+  #     AUTHENTIK_SECRET_KEY: file:///run/secrets/op2_secret_key
+  #     AUTHENTIK_ERROR_REPORTING__ENABLED: true
+  #   secrets:
+  #     - db2_username                                              # Use shared Docker Secret 'db_username'
+  #     - db2_password                                              # Use shared Docker Secret 'db_password'
+  #     - op2_secret_key
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - ./.secrets/certs:/certs
+  #     - op2_media:/media
+  #     - op2_templates:/templates
+  # # ICT endpoint for WSO2 (this Go application):
+  # ict2:
+  #   # For testing:
+  #   image: jonasprimbs/oidc-e2ea-server:latest                    # Use latest image from Docker Hub
 
-    # For development:
-    # build:
-    #   context: ./                                                 # Use this repository directory as context
-    #   dockerfile: Dockerfile                                      # Use 'Dockerfile' from context directory
+  #   # For development:
+  #   # build:
+  #   #   context: ./                                                 # Use this repository directory as context
+  #   #   dockerfile: Dockerfile                                      # Use 'Dockerfile' from context directory
 
-    # For both:
-    restart: unless-stopped                                       # Restore last on/off state after restart
-    depends_on:
-      - proxy                                                     # ICT endpoint requires running reverse proxy
-      - op2                                                       # ICT endpoint requires running OpenID Provider
-    labels:
-      - traefik.enable=true                                       # Enable Traefik reverse proxy exposure
-      - traefik.http.routers.ict2.entrypoints=web,websecure       # Enable exposure via HTTP entrypoint 'web'
-      - >-                                                        # Specify routing via hostname provided in environment variable 'OP_HOST' and append it to userinfo endpoint
-        traefik.http.routers.ict2.rule=(Host(`${OP2_HOST}`) &&
-        PathPrefix(`/application/o/userinfo/ict`))
-      - traefik.http.routers.ict2.priority=2                      # Set priority high (traefik.http.routers.op.priority must be lower)
-      - traefik.http.routers.ict2.middlewares=ict2@docker         # Include 'ict' middleware from Docker labels below 
-      - >-                                                        # Remove .../userinfo/ict path from request
-        traefik.http.middlewares.ict2.replacepathregex.regex=^/application/o/userinfo/ict(.*)
-      - >-                                                        # Forward only path after .../userinfo/ict (marked with '(.*)') in request to ICT endpoint
-        traefik.http.middlewares.ict2.replacepathregex.replacement=$$1
-    environment:
-      KEY_FILE: /run/secrets/op2_private_key                      # Set private key file to Docker Secret 'op_private_key'
-      ALG: RS256                                                  # Configure RSA with SHA256 (RS256) as signature algorithm for ID Assertion Tokens
-      USERINFO: http://op2:9000/application/o/userinfo            # Configure userinfo endpoint ('op' is the Docker-internal hostname of OpenID Provider service)
-      ISSUER: http://${OP2_HOST}/                                 # Configure issuer of issued ID Assertion Tokens
-      DEFAULT_TOKEN_PERIOD: 3600                                  # Configure the default lifetime of issued ID Assertion Tokens in seconds (3600s = 1h)
-      MAX_TOKEN_PERIOD: 2592000                                   # Configure the maximum lifetime of issued ID Assertion Tokens in seconds (2592000s = 30d)
-      PORT: 8080                                                  # Configure the internal port on which the ICT endpoint is listening
-    env_file:
-      - ./.secrets/ict2.env                                       # Include secrets from generated environment variables
-    secrets:
-      - op2_private_key                                           # Use shared Docker Secret 'op_private_key'
+  #   # For both:
+  #   restart: unless-stopped                                       # Restore last on/off state after restart
+  #   depends_on:
+  #     - proxy                                                     # ICT endpoint requires running reverse proxy
+  #     - op2                                                       # ICT endpoint requires running OpenID Provider
+  #   labels:
+  #     - traefik.enable=true                                       # Enable Traefik reverse proxy exposure
+  #     - traefik.http.routers.ict2.entrypoints=web,websecure       # Enable exposure via HTTP entrypoint 'web'
+  #     - >-                                                        # Specify routing via hostname provided in environment variable 'OP_HOST' and append it to userinfo endpoint
+  #       traefik.http.routers.ict2.rule=(Host(`${OP2_HOST}`) &&
+  #       PathPrefix(`/application/o/userinfo/ict`))
+  #     - traefik.http.routers.ict2.priority=2                      # Set priority high (traefik.http.routers.op.priority must be lower)
+  #     - traefik.http.routers.ict2.middlewares=ict2@docker         # Include 'ict' middleware from Docker labels below 
+  #     - >-                                                        # Remove .../userinfo/ict path from request
+  #       traefik.http.middlewares.ict2.replacepathregex.regex=^/application/o/userinfo/ict(.*)
+  #     - >-                                                        # Forward only path after .../userinfo/ict (marked with '(.*)') in request to ICT endpoint
+  #       traefik.http.middlewares.ict2.replacepathregex.replacement=$$1
+  #   environment:
+  #     KEY_FILE: /run/secrets/op2_private_key                      # Set private key file to Docker Secret 'op_private_key'
+  #     ALG: RS256                                                  # Configure RSA with SHA256 (RS256) as signature algorithm for ID Assertion Tokens
+  #     USERINFO: http://op2:9000/application/o/userinfo            # Configure userinfo endpoint ('op' is the Docker-internal hostname of OpenID Provider service)
+  #     ISSUER: http://${OP2_HOST}/                                 # Configure issuer of issued ID Assertion Tokens
+  #     DEFAULT_TOKEN_PERIOD: 3600                                  # Configure the default lifetime of issued ID Assertion Tokens in seconds (3600s = 1h)
+  #     MAX_TOKEN_PERIOD: 2592000                                   # Configure the maximum lifetime of issued ID Assertion Tokens in seconds (2592000s = 30d)
+  #     PORT: 8080                                                  # Configure the internal port on which the ICT endpoint is listening
+  #   env_file:
+  #     - ./.secrets/ict2.env                                       # Include secrets from generated environment variables
+  #   secrets:
+  #     - op2_private_key                                           # Use shared Docker Secret 'op_private_key'
 
 # Shared Docker Volumes:
 volumes:
   userdb:                                                         # Specify shared volume 'userdb'
   userdb2:
   redis2:
-  op2_media:
-  op2_templates:
+  # op2_media:
+  # op2_templates:
 
 # Shared Docker Secrets:
 secrets:
@@ -241,11 +241,11 @@ secrets:
     file: ./.secrets/db_password.txt                              # Use generated database password
   op_private_key:                                                 # Specify shared Docker Secret 'op_private_key'
     file: ./.secrets/private.pem                                  # Use generated private key
-  db2_username:                                                   # Specify shared Docker Secret 'db_username'
-    file: ./.secrets/db2_username.txt                             # Use generated database username
-  db2_password:                                                   # Specify shared Docker Secret 'db_password'
-    file: ./.secrets/db2_password.txt                             # Use generated database password
-  op2_secret_key:
-    file: ./.secrets/op2_secret_key.txt
-  op2_private_key:
-    file: ./.secrets/certs/private2.pem
+  # db2_username:                                                   # Specify shared Docker Secret 'db_username'
+  #   file: ./.secrets/db2_username.txt                             # Use generated database username
+  # db2_password:                                                   # Specify shared Docker Secret 'db_password'
+  #   file: ./.secrets/db2_password.txt                             # Use generated database password
+  # op2_secret_key:
+  #   file: ./.secrets/op2_secret_key.txt
+  # op2_private_key:
+  #   file: ./.secrets/certs/private2.pem
