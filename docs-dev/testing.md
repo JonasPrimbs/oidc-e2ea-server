@@ -40,14 +40,14 @@ and the following payload (without comments):
 {
   "iss": "postman", // The client ID.
   "sub": "9bbaa2f7-69a9-4eae-b6b8-94fc660112fc",  // The user's unique identifier. In Keycloak, this is a UUID which is displayed in the Users menu.
-  "aud": "http://op.localhost/realms/iat", // The OpenID Provider's URL = issuer of the ID Assertion Token.
+  "aud": "http://op.localhost/realms/ict", // The OpenID Provider's URL = issuer of the Identity Certification Token.
   "iat": 1659355205,  // Unix timestamp when the token was issued.
   "nbf": 1659355205,  // Unix timestamp when the token becomes valid.
   "exp": 1669355235,  // Unix timestamp when the token expires.
   "nonce": "VjfU46Z5ykIhn7jJzqZoWK+paq63EKuH",  // A random nonce.
-  "token_claims": "name email email_verified",  // The requested identity claims for the ID Assertion Token.
-  "token_lifetime": 3600, // The requested lifetime of the ID Assertion Token.
-  "token_nonce": "Bjxq27FUlB0XAW2ib+Zs6s57RQrcmUxA" // A random nonce to set into the ID Assertion Token.
+  "token_claims": "name email email_verified",  // The requested identity claims for the Identity Certification Token.
+  "token_lifetime": 3600, // The requested lifetime of the Identity Certification Token.
+  "token_nonce": "Bjxq27FUlB0XAW2ib+Zs6s57RQrcmUxA" // A random nonce to set into the Identity Certification Token.
 }
 ```
 
@@ -174,8 +174,8 @@ Therefore, you must authorize Postman as follows:
    3. In *Configure New Token* > *Configuration Options* insert the following values:
        - *Grant Type*: `Authorization Code (With PKCE)`
        - *Callback URL*: `https://oauth.pstmn.io/v1/callback` and tick *Authorize using browser*.
-       - *Auth URL*: `https://op.oidc-e2e.primbs.dev/realms/iat/protocol/openid-connect/auth`
-       - *Access Token URL*: `https://op.oidc-e2e.primbs.dev/realms/iat/protocol/openid-connect/token`
+       - *Auth URL*: `https://op.oidc-e2e.primbs.dev/realms/ict/protocol/openid-connect/auth`
+       - *Access Token URL*: `https://op.oidc-e2e.primbs.dev/realms/ict/protocol/openid-connect/token`
        - *Client ID*: `postman`
    4. Click *Get New Access Token*.
    5. *Sign In* to your test user account, if requested.
@@ -191,8 +191,8 @@ Therefore, you must authorize Postman as follows:
    3. In *Configure New Token* > *Configuration Options* insert the following values:
        - *Grant Type*: `Authorization Code (With PKCE)`
        - *Callback URL*: `https://oauth.pstmn.io/v1/callback` and tick *Authorize using browser*.
-       - *Auth URL*: `http://op.localhost/realms/iat/protocol/openid-connect/auth`
-       - *Access Token URL*: `http://op.localhost/realms/iat/protocol/openid-connect/token`
+       - *Auth URL*: `http://op.localhost/realms/ict/protocol/openid-connect/auth`
+       - *Access Token URL*: `http://op.localhost/realms/ict/protocol/openid-connect/token`
        - *Client ID*: `postman`
    4. Click *Get New Access Token*.
    5. *Sign In* to your test user account, if requested.
@@ -206,7 +206,7 @@ Now you can perform requests to the server as follows:
   <summary><b>For Public Authorization Server</b></summary>
 
    1. Select the HTTP Method *POST*.
-   2. Insert the URL `https://op.oidc-e2e.primbs.dev/realms/iat/protocol/openid-connect/userinfo/iat`.
+   2. Insert the URL `https://op.oidc-e2e.primbs.dev/realms/ict/protocol/openid-connect/userinfo/ict`.
    3. Go to the *Body* tab and insert the Token Request JWT as *raw*.
    4. Click *Send*.
 
@@ -216,7 +216,7 @@ Now you can perform requests to the server as follows:
   <summary><b>For Local Authorization Server</b></summary>
 
    1. Select the HTTP Method *POST*.
-   2. Insert the URL `http://op.localhost/realms/iat/protocol/openid-connect/userinfo/iat`.
+   2. Insert the URL `http://op.localhost/realms/ict/protocol/openid-connect/userinfo/ict`.
    3. Go to the *Body* tab and insert the Token Request JWT as *raw*.
    4. Click *Send*.
 

@@ -133,7 +133,7 @@ Create a new test user as follows:
 This step depends on your intention why you run this deployment.
 
 - **Testing**: Choose this mode if you want to just run the deployment for testing purposes.
-- **Development**: Choose this mode if you want to change the implementation of the IAT endpoint application.
+- **Development**: Choose this mode if you want to change the implementation of the ICT endpoint application.
 
 
 ### 6.1. Test Deployment

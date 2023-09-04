@@ -1,34 +1,33 @@
 openapi: 3.0.3
 info:
-  title: OIDC ID Assertion Token Userinfo Endpoint
-  description: Endpoint for OpenID Connect's ID Assertion Token endpoint for userinfo.
-  version: 0.4.0
+  title: OIDC² - Identity Certification Token Endpoint
+  description: Endpoint for OpenID Connect's Identity Certification Token.
+  version: 0.5.0
 servers:
-- url: https://op.oidc-e2e.primbs.dev/realms/iat/protocol/openid-connect/userinfo/iat
-- url: http://op.localhost/realms/iat/protocol/openid-connect/userinfo/iat
+- url: http://op.localhost/realms/ict/protocol/openid-connect/ict
 paths:
   /:
     post:
-      summary: Request a new IAT
-      description: Request a new ID Assertion Token
-      operationId: genIat
+      summary: Request a new ICT
+      description: Request a new Identity Certification Token
+      operationId: genIct
       requestBody:
-        description: Authenticate and send request parameters for a new ID Assertion Token.
+        description: Authenticate and send request parameters for a new Identity Certification Token.
         content:
           application/jwt:
             schema:
-              $ref: '#/components/schemas/IdAssertionTokenRequestJwt'
+              $ref: '#/components/schemas/IdentityCertificationTokenRequestJwt'
         required: true
       responses:
         "201":
           description: |
             **Created**
 
-            Returns the generated ID Assertion Token with additional information about it.
+            Returns the generated Identity Certification Token with additional information about it.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/IatResponse'
+                $ref: '#/components/schemas/IctResponse'
         "401":
           description: |
             **Unauthorized**
@@ -60,7 +59,7 @@ paths:
                 $ref: '#/components/schemas/ErrorStatus'
               examples:
                 AccessTokenInvalid:
-                  summary: Access Token not valid
+                  summary: Access Token not valid for request
                   value:
                     code: 403
                     status: Forbidden
@@ -77,12 +76,18 @@ paths:
                     code: 403
                     status: Forbidden
                     description: Proof of Possession not found
+        "404":
+          description: |
+            **Not Found**
+
+            Possible reasons:
+              - Requested required claims cannot be fulfilled
         "500":
           description: |
             **Internal Server Error**
 
             Possible reasons:
-            - Connection to OpenID Provider failed.
+            - Connection to OpenID Provider or database failed.
           content:
             application/json:
               schema:
@@ -104,8 +109,8 @@ paths:
         - profile
         - email
     options:
-      summary: Options for IAT
-      description: Return Options for the ID Assertion Token Endpoint to avoid CORS errors.
+      summary: Options for ICT
+      description: Return Options for the Identity Certification Token Endpoint to avoid CORS errors.
       operationId: iatOptions
       responses:
         "204":
@@ -153,50 +158,64 @@ components:
           type: string
           description: More detailed description
       description: Information about ocurred error.
-    IdAssertionTokenRequestJwt:
+    IdentityCertificationTokenRequestJwt:
       type: string
       description: |
         A JSON Web Token (JWT) which MUST
-          - be signed with an asymmetric algorithm (`ES256`, `ES384`, `ES512`, `RS256`, `RS384`, `RS512`, or `EdDSA` allowed).
-          - have the type `"typ": "JWT"` in the header.
+          - be signed with an asymmetric algorithm (`ES256`, `ES384`, `ES512`, `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, or `EdDSA` allowed).
+          - have the type `"typ": "jwt+pop"` in the header.
           - contain the client's public key in the JWT header (`"jwk": <public-key>`).
           - be issued by the client (`"iss": "<client-id>"`).
-          - have the OpenID Provider as audience (`"aud": "<op-id>"`).
-          - have the requested user's ID as subject (`"sub": "<user-id>"`).
+          - have the OpenID Provider as audience (`"aud": "<op-issuer-url>"`).
+          - have the requesting End-User's ID as subject (`"sub": "<user-id>"`).
           - have an issued at date (`"iat": <issuance-time>`).
           - have an expiration date (`"exp": <expiration-time>`).
-          - be valid for at most 10 minutes (`"exp"` minus `"nbf"` or `"iat"` is less or equal `600`).
-          - contain a unique nonce (`"nonce": "<random string>"`).
-          - contain the requested claims as a space delimited string (`"token_claims": "<claim-0> <claim-1>"`)
+          - be valid for at most 300 seconds (= 5 minutes) (`"exp"` minus `"nbf"` or `"iat"` is less or equal `300`).
+          - contain a JWT ID (`"jti": "<random string>"`) that is unique for the combination of iss, aud and sub within its validity period.
           - be signed with the client's private key
       format: jwt
-      example: eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6ImNYUThiZGVOZWVTd2ZMa0h6TWZBVUZySGxMWFpXdkpybW9NMnNDUEdVbmciLCJ5IjoiN0Rwd21Pb0hJbmQwUWNSRVJUS1pBQ2k5YndzYTVnR0tER3hGeG00OEdSQSJ9fQ.eyJpc3MiOiJjbGllbnQuZXhhbXBsZS5vcmciLCJzdWIiOiJqb2huLnNtaXRoQGFjY291bnRzLmV4YW1wbGUub3JnIiwiYXVkIjoiaHR0cHM6Ly9hY2NvdW50cy5leGFtcGxlLm9yZy8iLCJpYXQiOjE2NTkzNTUyMDUsIm5iZiI6MTY1OTM1NTIwNSwiZXhwIjoxNjU5MzU1MjM1LCJub25jZSI6IlZqZlU0Nlo1eWtJaG43akp6cVpvV0srcGFxNjNFS3VIIiwidG9rZW5fY2xhaW1zIjoibmFtZSBlbWFpbCBlbWFpbF92ZXJpZmllZCIsInRva2VuX2xpZmV0aW1lIjozNjAwLCJ0b2tlbl9ub25jZSI6IkJqeHEyN0ZVbEIwWEFXMmliK1pzNnM1N1JRcmNtVXhBIn0.Z6uoiakqd7MAAJkQ8Bry6SHrp0dQJyd5PWBgsu1EJMHBygDfB1pC_UDiakcaB5QO6-Ec3eYkNlztTVw_XBR0Tg
-    IatResponse:
+      example: eyJhbGciOiJFUzM4NCIsInR5cCI6Imp3dCtwb3AiLCJqd2siOnsia3R5IjoiRUMiLCJjcnYiOiJQLTM4NCIsIngiOiItOExuNUoyamlHOVI2WXBvcFp6ay1DY0dvRFhqdGR2ZDE2cUJUd0E0RktydFdCcmxoZ3c3ZnloMG1HdnhoY2xWIiwieSI6IlFrRV9JajJINm5Db085V0dxQXRBVEVOM29uX0JpbHlOY2w1dUgzWmtfT0ZhNHF6dWRDbWlXUzEwVElHVnVTNVAifX0.eyJpc3MiOiJleGFtcGxlY2xpZW50Iiwic3ViIjoiMTIzNDU2Nzg5MCIsImF1ZCI6Imh0dHBzOi8vb3AuZXhhbXBsZS5jb20iLCJpYXQiOjE2OTE3MTIwMDAsIm5iZiI6MTY5MTcxMjAwMCwiZXhwIjoxNjkxNzEyMDYwLCJqdGkiOiJkNl9wdFptWjhsYVg0REtvV1hEMDhvWlg1eW8iLCJyZXF1aXJlZF9jbGFpbXMiOlsibmFtZSJdLCJvcHRpb25hbF9jbGFpbXMiOlsiZW1haWwiLCJwaG9uZV9udW1iZXIiXSwid2l0aF9hdWRpZW5jZSI6dHJ1ZX0.LnFFlhhZipPm0FFt8eUQff5cVAoPRnxa0udNRicjXMZDewMGbXF0q5J2j2XBfAoem0cm8twTFnf56x1iraqr8bpe17U6yp_B-s9YZmUTne-Bd3AHhGgisKpVCubMz_jD
+    IctResponse:
       required:
-      - id_assertion_token
+      - identity_certification_token
+      - expires_in
+      - claims
+      - e2e_auth_contexts
       type: object
       properties:
-        id_assertion_token:
-          $ref: '#/components/schemas/IdAssertionToken'
+        identity_certification_token:
+          $ref: '#/components/schemas/IdentityCertificationToken'
+        e2e_auth_contexts:
+          type: array
+          description: Array of authorized end-to-end authentication contexts.
+          example: [email instant_messaging]
+          items:
+            type: string
         expires_in:
           type: integer
-          description: Number of seconds until the ID Assertion Token expires.
+          description: Number of seconds until the Identity Certification Token expires.
           format: int32
           minimum: 0
-          maximum: 2592000
-          example: 3600
+          maximum: 3600
+          example: 300
         claims:
-          type: string
-          description: Space delimited claims provided in the ID Assertion Token.
-          example: sub name email email_verified
+          type: array
+          description: Array of claims provided in the Identity Certification Token.
+          example: 
+            - sub
+            - name
+            - email
+            - email_verified
+          items:
+            type: string
       example:
         claims: sub name email email_verified
-        id_assertion_token: eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCtEUE9QIiwia2lkIjoxfQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmV4YW1wbGUub3JnLyIsInN1YiI6ImpvaG4uc21pdGhAYWNjb3VudHMuZXhhbXBsZS5vcmciLCJpYXQiOjE2NTkzNTUyMDUsIm5iZiI6MTY1OTM1NTIwNSwiZXhwIjoxNjU5MzU4ODA1LCJub25jZSI6IlZqZlU0Nlo1eWtJaG43akp6cVpvV0srcGFxNjNFS3VIIiwiY25mIjp7Imp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6ImNYUThiZGVOZWVTd2ZMa0h6TWZBVUZySGxMWFpXdkpybW9NMnNDUEdVbmciLCJ5IjoiN0Rwd21Pb0hJbmQwUWNSRVJUS1pBQ2k5YndzYTVnR0tER3hGeG00OEdSQSJ9fSwibmFtZSI6IkpvaG4gU21pdGgiLCJlbWFpbCI6ImpvaG4uc21pdGhAbWFpbC5zYW1wbGUub3JnIiwiZW1haWxfdmVyaWZpZWQiOnRydWV9.TEIehA9Xzmo72QoWMTwlkHA2FzypvGq8mAnGyJLD7H3TAYodrMzJnqyTaU7N36Qij2w5-8IpoPIzahGoKC6J_w
+        identity_certification_token: eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCtEUE9QIiwia2lkIjoxfQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmV4YW1wbGUub3JnLyIsInN1YiI6ImpvaG4uc21pdGhAYWNjb3VudHMuZXhhbXBsZS5vcmciLCJpYXQiOjE2NTkzNTUyMDUsIm5iZiI6MTY1OTM1NTIwNSwiZXhwIjoxNjU5MzU4ODA1LCJub25jZSI6IlZqZlU0Nlo1eWtJaG43akp6cVpvV0srcGFxNjNFS3VIIiwiY25mIjp7Imp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6ImNYUThiZGVOZWVTd2ZMa0h6TWZBVUZySGxMWFpXdkpybW9NMnNDUEdVbmciLCJ5IjoiN0Rwd21Pb0hJbmQwUWNSRVJUS1pBQ2k5YndzYTVnR0tER3hGeG00OEdSQSJ9fSwibmFtZSI6IkpvaG4gU21pdGgiLCJlbWFpbCI6ImpvaG4uc21pdGhAbWFpbC5zYW1wbGUub3JnIiwiZW1haWxfdmVyaWZpZWQiOnRydWV9.TEIehA9Xzmo72QoWMTwlkHA2FzypvGq8mAnGyJLD7H3TAYodrMzJnqyTaU7N36Qij2w5-8IpoPIzahGoKC6J_w
         expires_in: 3600
-    IdAssertionToken:
+    IdentityCertificationToken:
       type: string
       description: |
-        **ID Assertion Token** as `jwt+dpop` which MUST
+        **Identity Certification Token** as `jwt+ict` which MUST
           - contain a JWK Key ID of the OpenID Provider's key pair which is used for signing this token (`"kid": <key-id>`) in the JWT header
           - be issued by the OpenID Provider (`"iss": "<op-id>"`)
           - have an issued at date (`"iat": <issuance-time>`)
@@ -206,7 +225,7 @@ components:
           - contain the client's public key as confirmation claim (`"cnf": { "jwk": <public-key> }`)
           - contain the requested claims (e.g., `"name": "<full-name>"`, `"email": "<email-address>"`, ...), but only if they are covered by the scopes of the provided Access Token
           - be signed with the OpenID Provider's private key
-      format: jwt+dpop
+      format: jwt+ict
       example: eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCtEUE9QIiwia2lkIjoxfQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmV4YW1wbGUub3JnLyIsInN1YiI6ImpvaG4uc21pdGhAYWNjb3VudHMuZXhhbXBsZS5vcmciLCJpYXQiOjE2NTkzNTUyMDUsIm5iZiI6MTY1OTM1NTIwNSwiZXhwIjoxNjU5MzU4ODA1LCJub25jZSI6IlZqZlU0Nlo1eWtJaG43akp6cVpvV0srcGFxNjNFS3VIIiwiY25mIjp7Imp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6ImNYUThiZGVOZWVTd2ZMa0h6TWZBVUZySGxMWFpXdkpybW9NMnNDUEdVbmciLCJ5IjoiN0Rwd21Pb0hJbmQwUWNSRVJUS1pBQ2k5YndzYTVnR0tER3hGeG00OEdSQSJ9fSwibmFtZSI6IkpvaG4gU21pdGgiLCJlbWFpbCI6ImpvaG4uc21pdGhAbWFpbC5zYW1wbGUub3JnIiwiZW1haWxfdmVyaWZpZWQiOnRydWV9.TEIehA9Xzmo72QoWMTwlkHA2FzypvGq8mAnGyJLD7H3TAYodrMzJnqyTaU7N36Qij2w5-8IpoPIzahGoKC6J_w
     JwkPublicKey:
       oneOf:
@@ -350,8 +369,8 @@ components:
       type: oauth2
       flows:
         authorizationCode:
-          authorizationUrl: https://op.oidc-e2e.primbs.dev/realms/iat/protocol/openid-connect/auth
-          tokenUrl: https://op.oidc-e2e.primbs.dev/realms/iat/protocol/openid-connect/token
+          authorizationUrl: https://op.oidc-e2e.primbs.dev/realms/ict/protocol/openid-connect/auth
+          tokenUrl: https://op.oidc-e2e.primbs.dev/realms/ict/protocol/openid-connect/token
           scopes:
             openid: |
               **General OpenID Connect authorization**
@@ -383,8 +402,8 @@ components:
       type: oauth2
       flows:
         authorizationCode:
-          authorizationUrl: http://op.localhost/realms/iat/protocol/openid-connect/auth
-          tokenUrl: http://op.localhost/realms/iat/protocol/openid-connect/token
+          authorizationUrl: http://op.localhost/realms/ict/protocol/openid-connect/auth
+          tokenUrl: http://op.localhost/realms/ict/protocol/openid-connect/token
           scopes:
             openid: |
               **General OpenID Connect authorization**

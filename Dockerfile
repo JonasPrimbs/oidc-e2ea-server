@@ -1,5 +1,5 @@
 # Generate build container
-FROM golang:1.19 AS build
+FROM golang:1.21 AS build
 
 # Create working directory for source files
 WORKDIR /go/src
@@ -18,8 +18,8 @@ ENV GOOS=linux
 # Download dependencies
 RUN go get -d -v ./...
 
-# Compile application to single binary file 'iat'
-RUN go build -a -ldflags '-linkmode external -extldflags "-static"' -o /go/src/iat
+# Compile application to single binary file 'ict'
+RUN go build -a -ldflags '-linkmode external -extldflags "-static"' -o /go/src/ict
 
 
 # Generate runtime container
@@ -29,7 +29,7 @@ FROM scratch AS runtime
 WORKDIR /
 
 # Copy compiled binary from build container
-COPY --from=build /go/src/iat /iat
+COPY --from=build /go/src/ict /ict
 
 # Set default configuration parameters
 ENV ALG="ES256"
@@ -42,4 +42,4 @@ ENV DB_SQLITE_FILE="/config/db.sqlite"
 EXPOSE ${PORT}/tcp
 
 # Define the binary as the entrypoint
-ENTRYPOINT ["/iat"]
+ENTRYPOINT ["/ict"]
