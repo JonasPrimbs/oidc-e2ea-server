@@ -2,7 +2,7 @@
 services:
   # Reverse Proxy (Traefik):
   proxy:
-    image: traefik:v2.9                                           # Use Traefik reverse proxy
+    image: traefik:v2.10                                          # Use Traefik reverse proxy
     restart: unless-stopped                                       # Restore last on/off state after restart
     ports:
       - 80:80                                                     # Open port 80 (HTTP)
@@ -20,7 +20,7 @@ services:
 
   # Keycloak Database (PostgreSQL):
   db:
-    image: postgres:15-alpine                                     # Use PostgreSQL on Alpine Linux as database for Keycloak
+    image: postgres:16-alpine                                     # Use PostgreSQL on Alpine Linux as database for Keycloak
     restart: unless-stopped                                       # Restore last on/off state after restart
     environment:
       POSTGRES_DB: keycloak                                       # Name database 'keycloak'
@@ -33,7 +33,7 @@ services:
       - userdb:/var/lib/postgresql/data                           # Mount PostgreSQL data to shared Docker Volume 'userdb'
   # OpenID Provider (Keycloak):
   op:
-    image: quay.io/keycloak/keycloak:22.0.1                         # Use Keycloak as OpenID Provider
+    image: quay.io/keycloak/keycloak:22.0.5                         # Use Keycloak as OpenID Provider
     restart: unless-stopped                                       # Restore last on/off state after restart
     ports:
       - 8080:8080
