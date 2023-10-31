@@ -8,6 +8,7 @@
 package ict
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
@@ -556,7 +557,7 @@ func ValidateProofOfPossession(popToken *jwt.Token, popClaims jwt.MapClaims, use
 	return nil
 }
 
-func GenerateIct(privateKey interface{}, algorithm jwt.SigningMethod, tokenClaims jwt.MapClaims, publicKeyJwk map[string]interface{}, userinfoClaims map[string]interface{}, config AppConfiguration, contexts []string) (string, []string, int64, error) {
+func GenerateIct(privateKey interface{}, algorithm jwt.SigningMethod, tokenClaims jwt.MapClaims, publicKeyJwk map[string]interface{}, userinfoClaims map[string]interface{}, config AppConfiguration, contexts []string, audience string, withAudience bool) (string, []string, int64, error) {
 	// Compute token validity
 	expiresIn := config.DefaultTokenPeriod
 	if tokenLifetime, ok := tokenClaims["token_lifetime"]; ok {
@@ -638,6 +639,14 @@ func GenerateIct(privateKey interface{}, algorithm jwt.SigningMethod, tokenClaim
 	requestedClaims["nonce"] = nonce
 	requestedClaims["jti"] = jti
 
+	// Add granted contexts.
+	requestedClaims["ctx"] = contexts
+
+	// Add audience.
+	if withAudience {
+		requestedClaims["aud"] = audience
+	}
+
 	// Set time constraints
 	now := time.Now().Unix()
 	expiresAt := now + int64(expiresIn)
@@ -659,6 +668,77 @@ func GenerateIct(privateKey interface{}, algorithm jwt.SigningMethod, tokenClaim
 	}
 
 	return iatString, claimNames, expiresAt, nil
+}
+
+func IntrospectAccessToken(accessToken string, tokenIntrospectionEndpoint string) (map[string]interface{}, error) {
+	// Generate HTTP POST Body for token introspection.
+	body := bytes.NewBuffer([]byte("token=" + accessToken + "&token_type_hint=access_token"))
+
+	// Send HTTP POST request to token introspection endpoint.
+	req, err := http.NewRequest("POST", tokenIntrospectionEndpoint, body)
+	if err != nil {
+		return nil, errors.Join(errors.New("Failed to create token introspection request"), err)
+	}
+	if appConfig.TokenIntrospectionHost != "" {
+		req.Host = appConfig.TokenIntrospectionHost
+	}
+	// Add headers:
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/x-www-form-urlencoded")
+	req.Header.Add("authorization", appConfig.IntrospectionCredentials)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, errors.Join(errors.New("Failed to request token introspection endpoint"), err)
+	}
+	defer res.Body.Close()
+
+	// Parse token introspection response.
+	var introspectionDocument map[string]interface{}
+	err = json.NewDecoder(res.Body).Decode(&introspectionDocument)
+	if err != nil {
+		return nil, errors.Join(errors.New("Failed to parse token introspection response"), err)
+	}
+
+	fmt.Print("introspection: ")
+	is, err := json.Marshal(introspectionDocument)
+	if err == nil {
+		fmt.Println(string(is))
+	} else {
+		fmt.Println("error")
+	}
+
+	// Return parsed response
+	return introspectionDocument, nil
+}
+
+func GetContexts(accessTokenClaims map[string]interface{}) ([]string, error) {
+	// Get scope claim from access token.
+	scopeClaim, scopeExists := accessTokenClaims["scope"].(string)
+	if !scopeExists {
+		return nil, errors.New("scope claim not found")
+	}
+
+	// Get scopes as string array.
+	scopes := strings.Split(scopeClaim, " ")
+
+	var contexts []string
+	for _, scope := range scopes {
+		// Ensure that scope is a context scope.
+		if !strings.HasPrefix(scope, appConfig.ContextPrefix) {
+			continue
+		}
+
+		// Extract the context from scope.
+		context := scope[len(appConfig.ContextPrefix):]
+
+		if context != "" {
+			// Add the context to list of contexts.
+			contexts = append(contexts, context)
+		}
+	}
+
+	// Return the found contexts.
+	return contexts, nil
 }
 
 func GenIct(w http.ResponseWriter, r *http.Request) {
@@ -702,9 +782,29 @@ func GenIct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Introspect access token
+	accessTokenClaims, err := IntrospectAccessToken(bearerToken, appConfig.TokenIntrospectionEndpoint)
+	if err != nil {
+		LogAndSendError(w, http.StatusInternalServerError, "internal server error", "unknown internal server error", "failed to introspect Access Token: "+err.Error())
+	}
+
+	// Get the contexts from access token claims
+	contexts, err := GetContexts(accessTokenClaims)
+	if err != nil {
+		LogAndSendError(w, http.StatusInternalServerError, "internal server error", "unknown internal server error", "failed to get contexts from Access Token: "+err.Error())
+	}
+
+	// Get the client id from access token claims
+	clientId, clientIdFound := accessTokenClaims["azp"].(string)
+	if !clientIdFound {
+		LogAndSendError(w, http.StatusInternalServerError, "internal server error", "unknown internal server error", "Client ID not present in Access Token")
+	}
+
+	// Get with_audience paramter from request
+	withAudience, withAudienceFound := popClaims["with_audience"].(bool)
+
 	// Generate Identity Certification Token
-	contexts := []string{}
-	ict, identityClaims, expiresAt, err := GenerateIct(appPrivateKey, appConfig.SigningAlgorithm, popClaims, publicKeyJwk, userinfoClaims, appConfig, contexts)
+	ict, identityClaims, expiresAt, err := GenerateIct(appPrivateKey, appConfig.SigningAlgorithm, popClaims, publicKeyJwk, userinfoClaims, appConfig, contexts, clientId, withAudienceFound && withAudience)
 	if err != nil {
 		LogAndSendError(w, http.StatusInternalServerError, "internal server error", "unknown internal server error", "failed to generate Identity Certification Token: "+err.Error())
 		return

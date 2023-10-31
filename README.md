@@ -120,6 +120,63 @@ USERINFO="http://localhost:8080/realms/ict/protocol/openid-connect/userinfo"
 Setting this variable is **required**.
 
 
+## Token Introspection Endpoint
+
+Absolute URI to the OpenID Provider's Token Introspection Endpoint described in [RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662).
+This URI is provided on the Discovery Endpoint as attribute `introspection_endpoint`.
+**Make sure that the running ICT Endpoint can access the OpenID Provider's Token Introspection Endpoint via this URI!**
+
+Example 1:
+```bash
+TOKEN_INTROSPECTION="https://openid-provider.sample.org/introspect"
+```
+
+Example 2 (Keycloak):
+```bash
+TOKEN_INTROSPECTION="http://localhost:8080/realms/ict/protocol/openid-connect/token/introspect"
+```
+
+Setting this variable is **required**.
+
+
+## Token Introspection Host
+
+The hostname in HTTP Host Header when requesting the Token Introspection Endpoint.
+If not provided, the hostname from the `TOKEN_INTROSPECTION` URL will be used.
+
+Example:
+```bash
+TOKEN_INTROSPECTION_HOST="openid-provider.sample.org
+```
+
+
+## Token Introspection Credentials
+
+The HTTP Authorization Header required for the Token Introspection Endpoint.
+Typically a HTTP Basic Authentication Header using the ICT Endpoint's Client Credentials.
+
+Example:
+```bash
+INTROSPECTION_CREDENTIALS="Basic aWN0X2VuZHBvaW50OlMzY3JldCE="
+```
+For Client ID `ict_endpoint` and Client Secret `S3cret!`
+
+Setting this variable is **required**, except the OpenID Provider does not requires any authorization for the Token Introspection Endpoint (not recommended).
+
+
+## Context Prefix
+
+Prefix of scopes which indicate the granted end-to-end authentication context.
+
+Default Value: `e2e_ctx_`.
+
+Example:
+```bash
+CONTEXT_PREFIX="ctx_"
+```
+The scope `ctx_email` will authorize the End-User for the `email` context.
+
+
 #### Issuer Claim
 
 The Identity Certification Token's Issuer.

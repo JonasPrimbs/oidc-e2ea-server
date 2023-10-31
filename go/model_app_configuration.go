@@ -16,13 +16,17 @@ import (
 )
 
 type AppConfiguration struct {
-	KeyFilePath        string            `json:"keyFilePath"`
-	KeyId              string            `json:"keyId"`
-	SigningAlgorithm   jwt.SigningMethod `json:"alg"`
-	UserinfoEndpoint   string            `json:"UserinfoEndpoint"`
-	Issuer             string            `json:"Issuer"`
-	DefaultTokenPeriod uint64            `json:"DefaultTokenPeriod"`
-	MaxTokenPeriod     uint32            `json:"MaxTokenPeriod"`
+	KeyFilePath                string            `json:"keyFilePath"`
+	KeyId                      string            `json:"keyId"`
+	SigningAlgorithm           jwt.SigningMethod `json:"alg"`
+	UserinfoEndpoint           string            `json:"userinfoEndpoint"`
+	TokenIntrospectionEndpoint string            `json:"tokenIntrospectionEndpoint"`
+	TokenIntrospectionHost     string            `json:"tokenIntrospectionHost"`
+	IntrospectionCredentials   string            `json:"introspectionCredentials"`
+	ContextPrefix              string            `json:"contextPrefix"`
+	Issuer                     string            `json:"issuer"`
+	DefaultTokenPeriod         uint64            `json:"defaultTokenPeriod"`
+	MaxTokenPeriod             uint32            `json:"maxTokenPeriod"`
 }
 
 func LoadAppConfigurationFromEnv() (AppConfiguration, error) {
@@ -69,6 +73,27 @@ func LoadAppConfigurationFromEnv() (AppConfiguration, error) {
 		return AppConfiguration{}, errors.New("failed to read userinfo endpoint: environment variable 'USERINFO' not found")
 	}
 
+	// Parse token introspection endpoint
+	tokenIntrospectionEndpoint := os.Getenv("TOKEN_INTROSPECTION")
+	if tokenIntrospectionEndpoint == "" {
+		return AppConfiguration{}, errors.New("failed to read token introspection endpoint: environment variable 'TOKEN_INTROSPECTION' not found")
+	}
+
+	// Parse token introspection host header
+	tokenIntrospectionHost := os.Getenv("TOKEN_INTROSPECTION_HOST")
+
+	// Parse token introspection credentials
+	introspectionCredentials := os.Getenv("INTROSPECTION_CREDENTIALS")
+	if introspectionCredentials == "" {
+		return AppConfiguration{}, errors.New("failed to read token introspection credentials: environment variable 'INTROSPECTION_CREDENTIALS' not found")
+	}
+
+	// Parse custom context prefix
+	contextPrefix := os.Getenv("CONTEXT_PREFIX")
+	if contextPrefix == "" {
+		contextPrefix = "e2e_ctx_"
+	}
+
 	// Parse issuer
 	issuer := os.Getenv("ISSUER")
 	if userinfoEndpoint == "" {
@@ -99,12 +124,16 @@ func LoadAppConfigurationFromEnv() (AppConfiguration, error) {
 
 	// Return result
 	return AppConfiguration{
-		KeyFilePath:        keyFilePath,
-		KeyId:              keyId,
-		SigningAlgorithm:   signingAlgorithm,
-		UserinfoEndpoint:   userinfoEndpoint,
-		Issuer:             issuer,
-		DefaultTokenPeriod: defaultTokenPeriod,
-		MaxTokenPeriod:     maxTokenPeriod,
+		KeyFilePath:                keyFilePath,
+		KeyId:                      keyId,
+		SigningAlgorithm:           signingAlgorithm,
+		UserinfoEndpoint:           userinfoEndpoint,
+		TokenIntrospectionEndpoint: tokenIntrospectionEndpoint,
+		TokenIntrospectionHost:     tokenIntrospectionHost,
+		IntrospectionCredentials:   introspectionCredentials,
+		ContextPrefix:              contextPrefix,
+		Issuer:                     issuer,
+		DefaultTokenPeriod:         defaultTokenPeriod,
+		MaxTokenPeriod:             maxTokenPeriod,
 	}, nil
 }

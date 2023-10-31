@@ -91,6 +91,11 @@ services:
       ALG: RS256                                                  # Configure RSA with SHA256 (RS256) as signature algorithm for ID Assertion Tokens
       USERINFO: >-                                                # Configure userinfo endpoint ('op' is the Docker-internal hostname of OpenID Provider service)
         http://op:8080/realms/ict/protocol/openid-connect/userinfo
+      TOKEN_INTROSPECTION: >-
+        http://op:8080/realms/ict/protocol/openid-connect/token/introspect
+      TOKEN_INTROSPECTION_HOST: op.localhost
+      INTROSPECTION_CREDENTIALS: ${ICT_CREDENTIALS}               # HTTP Basic Authentication Client Credentials of ICT Endpoint
+      CONTEXT_PREFIX: e2e_auth_
       ISSUER: http://${OP_HOST}/realms/ict                        # Configure issuer of issued ID Assertion Tokens
       DEFAULT_TOKEN_PERIOD: 3600                                  # Configure the default lifetime of issued ID Assertion Tokens in seconds (3600s = 1h)
       MAX_TOKEN_PERIOD: 2592000                                   # Configure the maximum lifetime of issued ID Assertion Tokens in seconds (2592000s = 30d)
