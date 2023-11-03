@@ -2,5 +2,8 @@
     "markdown.extension.toc.levels": "2..3",
     "markdown.extension.toc.omittedFromToc": {
         "README.md": ["## Table of Contents"]
-    }
+    },
+    "cSpell.words": [
+        "Keycloak"
+    ]
 }
