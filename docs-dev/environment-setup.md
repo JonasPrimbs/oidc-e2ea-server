@@ -128,6 +128,24 @@ Create a new test user as follows:
  6. Confirm the dialog by clicking *Save password*.
 
 
+### 5.6. Configure ICT Endpoint
+
+To introspect the Access Token from the Authorization Server, the ICT Endpoint must be registered at the Authorization Server as follows:
+
+ 1. Go to *Clients* > *Client list* > *ict_endpoint* > Credentials.
+ 2. *Regenerate* the Client secret and copy it to clipboard.
+ 3. Open a [HTTP Basic Authentication Header Generator](https://www.blitter.se/utils/basic-authentication-header-generator/).
+ 4. As Username, insert `ict_endpoint`.
+ 5. As Password, paste the Client secret.
+ 6. Generate the Basic Auth header and copy the header value (e.g., `Basic aWN0X2VuZHBvaW50OjhjOHY2aGRhZ3c5ZXRTOFVMYVdVZ1dhT2ZUNWpKTzNa`).
+ 7. Paste this value to the [`/.env`](../.env) file in the `ICT_CREDENTIALS` variable
+ 
+ Example:
+ ```bash
+ ICT_CREDENTIALS="Basic aWN0X2VuZHBvaW50OjhjOHY2aGRhZ3c5ZXRTOFVMYVdVZ1dhT2ZUNWpKTzNa"`
+```
+
+
 ## 6. Configure Deployment Mode
 
 This step depends on your intention why you run this deployment.

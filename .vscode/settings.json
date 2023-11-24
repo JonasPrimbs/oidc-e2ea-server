@@ -4,6 +4,7 @@
         "README.md": ["## Table of Contents"]
     },
     "cSpell.words": [
-        "Keycloak"
+        "Keycloak",
+        "Userinfo"
     ]
 }
