@@ -120,7 +120,7 @@ USERINFO="http://localhost:8080/realms/ict/protocol/openid-connect/userinfo"
 Setting this variable is **required**.
 
 
-## Token Introspection Endpoint
+#### Token Introspection Endpoint
 
 Absolute URI to the OpenID Provider's Token Introspection Endpoint described in [RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662).
 This URI is provided on the Discovery Endpoint as attribute `introspection_endpoint`.
@@ -139,7 +139,7 @@ TOKEN_INTROSPECTION="http://localhost:8080/realms/ict/protocol/openid-connect/to
 Setting this variable is **required**.
 
 
-## Token Introspection Host
+#### Token Introspection Host
 
 The hostname in HTTP Host Header when requesting the Token Introspection Endpoint.
 If not provided, the hostname from the `TOKEN_INTROSPECTION` URL will be used.
@@ -150,7 +150,7 @@ TOKEN_INTROSPECTION_HOST="openid-provider.sample.org
 ```
 
 
-## Token Introspection Credentials
+#### Token Introspection Credentials
 
 The HTTP Authorization Header required for the Token Introspection Endpoint.
 Typically a HTTP Basic Authentication Header using the ICT Endpoint's Client Credentials.
@@ -164,7 +164,7 @@ For Client ID `ict_endpoint` and Client Secret `S3cret!`
 Setting this variable is **required**, except the OpenID Provider does not requires any authorization for the Token Introspection Endpoint (not recommended).
 
 
-## Context Prefix
+#### Context Prefix
 
 Prefix of scopes which indicate the granted end-to-end authentication context.
 
