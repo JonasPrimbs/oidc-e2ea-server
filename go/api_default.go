@@ -261,6 +261,11 @@ func RequestUserinfo(bearerToken string, uri string, issuer string) (map[string]
 		return nil, errors.New("failed to create userinfo request to '" + uri + "': " + err.Error()), false
 	}
 	req.Header.Set("Authorization", "Bearer "+bearerToken)
+	// Set Host header to prevent that introspection endpoint responds with {"active":false}.
+	// See: https://stackoverflow.com/questions/53721588/keycloak-token-introspection-always-fails-with-activefalse
+	// issuerParts := strings.Split(issuer, "/")
+	// hostname := issuerParts[2]
+	// req.Host = hostname
 
 	// Send http request and validate response
 	res, err := client.Do(req)
@@ -786,18 +791,24 @@ func GenIct(w http.ResponseWriter, r *http.Request) {
 	accessTokenClaims, err := IntrospectAccessToken(bearerToken, appConfig.TokenIntrospectionEndpoint)
 	if err != nil {
 		LogAndSendError(w, http.StatusInternalServerError, "internal server error", "unknown internal server error", "failed to introspect Access Token: "+err.Error())
+		return
 	}
 
 	// Get the contexts from access token claims
 	contexts, err := GetContexts(accessTokenClaims)
 	if err != nil {
 		LogAndSendError(w, http.StatusInternalServerError, "internal server error", "unknown internal server error", "failed to get contexts from Access Token: "+err.Error())
+		return
 	}
 
 	// Get the client id from access token claims
 	clientId, clientIdFound := accessTokenClaims["azp"].(string)
 	if !clientIdFound {
-		LogAndSendError(w, http.StatusInternalServerError, "internal server error", "unknown internal server error", "Client ID not present in Access Token")
+		clientId, clientIdFound = accessTokenClaims["aud"].(string)
+		if !clientIdFound {
+			LogAndSendError(w, http.StatusInternalServerError, "internal server error", "unknown internal server error", "Client ID not present in Access Token")
+			return
+		}
 	}
 
 	// Get with_audience parameter from request

@@ -215,8 +215,8 @@ services:
       KEY_FILE: /run/secrets/op2_private_key                      # Set private key file to Docker Secret 'op_private_key'
       ALG: RS256                                                  # Configure RSA with SHA256 (RS256) as signature algorithm for ID Assertion Tokens
       USERINFO: http://op2:9000/application/o/userinfo/            # Configure userinfo endpoint ('op' is the Docker-internal hostname of OpenID Provider service)
-      TOKEN_INTROSPECTION: http://op2/application/o/introspect/
-      TOKEN_INTROSPECTION_HOST: op2
+      TOKEN_INTROSPECTION: http://op2:9000/application/o/introspect/
+      TOKEN_INTROSPECTION_HOST: op2:9000
       INTROSPECTION_CREDENTIALS: ${ICT_CREDENTIALS2}               # HTTP Basic Authentication Client Credentials of ICT Endpoint
       CONTEXT_PREFIX: e2e_auth_
       ISSUER: http://${OP2_HOST}/application/o/ict-benchmark/       # Configure issuer of issued ID Assertion Tokens
