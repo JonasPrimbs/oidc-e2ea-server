@@ -177,7 +177,7 @@ services:
   ict2:
     # # For testing:
     # image: jonasprimbs/oidc-e2ea-server:latest                    # Use latest image from Docker Hub
-    For development:
+    # For development:
     build:
       context: ./                                                 # Use this repository directory as context
       dockerfile: Dockerfile                                      # Use 'Dockerfile' from context directory
