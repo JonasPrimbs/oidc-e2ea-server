@@ -4,8 +4,13 @@
         "README.md": ["## Table of Contents"]
     },
     "cSpell.words": [
+        "github",
         "Keycloak",
+        "oidc",
+        "OIDC",
+        "sqlite",
         "Traefik",
+        "userinfo",
         "Userinfo"
     ]
 }

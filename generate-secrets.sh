@@ -6,7 +6,8 @@ DB_USERNAME_FILE="${SECRETS_DIR}db_username.txt"
 DB_PASSWORD_FILE="${SECRETS_DIR}db_password.txt"
 OP_USERNAME_FILE="${SECRETS_DIR}op_username.txt"
 OP_PASSWORD_FILE="${SECRETS_DIR}op_password.txt"
-PRIVATE_KEY2_FILE="${SECRETS_DIR}certs/private2.pem"
+PRIVATE_KEY2_FILE="${SECRETS_DIR}private2.pem"
+CERTIFICATE2_FILE="${SECRETS_DIR}certificate2.crt"
 DB2_USERNAME_FILE="${SECRETS_DIR}db2_username.txt"
 DB2_PASSWORD_FILE="${SECRETS_DIR}db2_password.txt"
 OP2_SECRET_KEY="${SECRETS_DIR}op2_secret_key.txt"
@@ -29,6 +30,8 @@ function generate_secret {
 
 # Create private key 2 file if not exists
 [ ! -f "$PRIVATE_KEY2_FILE" ] && openssl genrsa -out "$PRIVATE_KEY2_FILE" 2048
+
+[ ! -f "$CERTIFICATE2_FILE" ] && openssl req -new -x509 -nodes -key "$PRIVATE_KEY2_FILE" -out "$CERTIFICATE2_FILE" -days 365
 
 # Create DB username secret file if not exists
 [ ! -f "$DB_USERNAME_FILE" ] && generate_secret "$DB_USERNAME_FILE" 14

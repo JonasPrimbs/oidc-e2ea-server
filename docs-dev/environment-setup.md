@@ -185,3 +185,7 @@ And start it again:
 ```bash
 docker compose up -d
 ```
+
+## Help
+
+Default username in Authentik is `akadmin`.

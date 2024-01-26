@@ -261,10 +261,6 @@ func RequestUserinfo(bearerToken string, uri string, issuer string) (map[string]
 		return nil, errors.New("failed to create userinfo request to '" + uri + "': " + err.Error()), false
 	}
 	req.Header.Set("Authorization", "Bearer "+bearerToken)
-	// Set Host header
-	issuerParts := strings.Split(issuer, "/")
-	hostname := issuerParts[2]
-	req.Host = hostname
 
 	// Send http request and validate response
 	res, err := client.Do(req)
@@ -517,7 +513,11 @@ func ValidateProofOfPossession(popToken *jwt.Token, popClaims jwt.MapClaims, use
 	// Validate audience
 	ok := popClaims.VerifyAudience(config.Issuer, true)
 	if !ok {
-		return errors.New("invalid audience claim in proof of possession token")
+		aud, err := StringFromJson(popClaims, "aud")
+		if err != nil {
+			return errors.New("invalid audience claim in proof of possession token! No audience claim received!")
+		}
+		return errors.New("invalid audience claim in proof of possession token! Expected \"" + config.Issuer + "\" but received \"" + aud + "\"")
 	}
 
 	// Verify nonce validity
@@ -800,7 +800,7 @@ func GenIct(w http.ResponseWriter, r *http.Request) {
 		LogAndSendError(w, http.StatusInternalServerError, "internal server error", "unknown internal server error", "Client ID not present in Access Token")
 	}
 
-	// Get with_audience paramter from request
+	// Get with_audience parameter from request
 	withAudience, withAudienceFound := popClaims["with_audience"].(bool)
 
 	// Generate Identity Certification Token

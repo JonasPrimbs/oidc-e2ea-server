@@ -1246,32 +1246,6 @@
             "100"
           ]
         }
-      },
-      {
-        "id": "071a6cd0-03fd-45d4-8d02-0841b4d0daaa",
-        "name": "rsa",
-        "providerId": "rsa",
-        "subComponents": {},
-        "config": {
-          "privateKey": [
-            "**********"
-          ],
-          "certificate": [
-            "MIIClTCCAX0CBgGLlW6qQTANBgkqhkiG9w0BAQsFADAOMQwwCgYDVQQDDANpY3QwHhcNMjMxMTAzMTM0MzU5WhcNMzMxMTAzMTM0NTM5WjAOMQwwCgYDVQQDDANpY3QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQC48xcrKhB90TuBMhTV3R4wRvltRPrGxtZLHF34eilqk2nV9Vm7a+K9qSqeoWN491Bi+gZx+GPzZMoqXeU66DJ0zOxv3wXcClQ/7kXfS1IlEB97H+4npCTIo5f3HQ4ariGompVoqjdgIlQiE+ieA7fqcOwirMUC9FVas9J6oQfoJeqFDVnejP/yhdU2/kDfl1niATMCUn+wIxtXRSLBVU6yvBq7Z/ABSdc75qI+5RwgwkFxGRf2CrCXGNIDf9pO3UyBQyv/kRLZuY91AsYkMi41EVmxG7QmyX3xq1cMhh/Wop+jaeWR9Bvh3ZHuoTa15K5BpLg6K6sd1xyNzrsMF7ALAgMBAAEwDQYJKoZIhvcNAQELBQADggEBAAFib/zpc9hKLaIlmblsd2oyxPwJ+sH1GI5eSost/+sH/Hxgd3VDvjw7D/C5M/rPnWxZ/2IzfoUTthP5gqBAn6VcgKu1d3y8ShMXTSCyFAyHTx7ls5rTTl0Y32ZLkoJ5GkUpMV7uDq/v3Ghzgoo78Jrf83nAJ+6tBkMxyTaFjlcgtTaZ28ftkk16Z1NGq51rm/VjyByaRCKnYOx3Tn+ZWynRQAEAKPwLfeNH2VB9dSLjSxjUgIq3kjHIMxm13RPv01nWL1sQfiHBmDYaITz9omSK8rsMlqTeyFpZSMOUXfUYOBS0efacZ5DE1GIAoLT3XSo/xyRLAO+pf9rR7enEy84="
-          ],
-          "active": [
-            "true"
-          ],
-          "priority": [
-            "0"
-          ],
-          "enabled": [
-            "true"
-          ],
-          "algorithm": [
-            "RS256"
-          ]
-        }
       }
     ]
   },
