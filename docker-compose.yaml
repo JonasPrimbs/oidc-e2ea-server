@@ -7,6 +7,8 @@ services:
     ports:
       - 80:80/tcp                                                 # Open port 80 (HTTP)
       # - 443:443/tcp                                               # Open port 443 (HTTPS)
+    networks:
+      - proxy
     command:
       - "--accesslog=true"                                        # Log access for debugging
       - "--entrypoints.web.address=:80/tcp"                       # Use port 80 as entypoint 'web'
@@ -25,6 +27,8 @@ services:
       POSTGRES_DB: keycloak                                       # Name database 'keycloak'
       POSTGRES_USER_FILE: /run/secrets/db_username                # Set database username to Docker Secret 'db_username'
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password            # Set database password to Docker Secret 'db_password'
+    networks:
+      - proxy
     secrets:
       - db_username                                               # Use shared Docker Secret 'db_username'
       - db_password                                               # Use shared Docker Secret 'db_password'
@@ -37,6 +41,8 @@ services:
     depends_on:
       - proxy                                                     # Keycloak requires running reverse proxy
       - db                                                        # Keycloak requires running database
+    networks:
+      - proxy
     labels:
       - traefik.enable=true                                       # Enable Traefik reverse proxy exposure
       - traefik.http.routers.op.entrypoints=web                   # Enable exposure via HTTP entrypoint 'web'
@@ -70,6 +76,8 @@ services:
     depends_on:
       - proxy                                                     # ICT endpoint requires running reverse proxy
       - op                                                        # ICT endpoint requires running OpenID Provider
+    networks:
+      - proxy
     labels:
       - traefik.enable=true                                       # Enable Traefik reverse proxy exposure
       - traefik.http.routers.ict.entrypoints=web                  # Enable exposure via HTTP entrypoint 'web'
@@ -90,6 +98,7 @@ services:
       ALG: RS256                                                  # Configure RSA with SHA256 (RS256) as signature algorithm for ID Assertion Tokens
       USERINFO: >-                                                # Configure userinfo endpoint ('op' is the Docker-internal hostname of OpenID Provider service)
         http://op:8080/realms/ict/protocol/openid-connect/userinfo
+      USERINFO_HOST: op.localhost
       TOKEN_INTROSPECTION: >-
         http://op:8080/realms/ict/protocol/openid-connect/token/introspect
       TOKEN_INTROSPECTION_HOST: op.localhost
@@ -253,3 +262,8 @@ secrets:
     file: ./.secrets/op2_secret_key.txt
   op2_private_key:
     file: ./.secrets/private2.pem
+
+networks:
+  proxy:
+    driver: bridge
+    name: oidc2_proxy
