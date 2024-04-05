@@ -260,6 +260,9 @@ func RequestUserinfo(bearerToken string, uri string, issuer string) (map[string]
 	if err != nil {
 		return nil, errors.New("failed to create userinfo request to '" + uri + "': " + err.Error()), false
 	}
+	if appConfig.UserinfoHost != "" {
+		req.Host = appConfig.UserinfoHost
+	}
 	req.Header.Set("Authorization", "Bearer "+bearerToken)
 	// Set Host header to prevent that introspection endpoint responds with {"active":false}.
 	// See: https://stackoverflow.com/questions/53721588/keycloak-token-introspection-always-fails-with-activefalse

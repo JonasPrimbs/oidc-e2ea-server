@@ -20,6 +20,7 @@ type AppConfiguration struct {
 	KeyId                      string            `json:"keyId"`
 	SigningAlgorithm           jwt.SigningMethod `json:"alg"`
 	UserinfoEndpoint           string            `json:"userinfoEndpoint"`
+	UserinfoHost               string            `json:"userinfoHost"`
 	TokenIntrospectionEndpoint string            `json:"tokenIntrospectionEndpoint"`
 	TokenIntrospectionHost     string            `json:"tokenIntrospectionHost"`
 	IntrospectionCredentials   string            `json:"introspectionCredentials"`
@@ -72,6 +73,8 @@ func LoadAppConfigurationFromEnv() (AppConfiguration, error) {
 	if userinfoEndpoint == "" {
 		return AppConfiguration{}, errors.New("failed to read userinfo endpoint: environment variable 'USERINFO' not found")
 	}
+
+	userinfoHost := os.Getenv("TOKEN_INTROSPECTION_HOST")
 
 	// Parse token introspection endpoint
 	tokenIntrospectionEndpoint := os.Getenv("TOKEN_INTROSPECTION")
@@ -128,6 +131,7 @@ func LoadAppConfigurationFromEnv() (AppConfiguration, error) {
 		KeyId:                      keyId,
 		SigningAlgorithm:           signingAlgorithm,
 		UserinfoEndpoint:           userinfoEndpoint,
+		UserinfoHost:               userinfoHost,
 		TokenIntrospectionEndpoint: tokenIntrospectionEndpoint,
 		TokenIntrospectionHost:     tokenIntrospectionHost,
 		IntrospectionCredentials:   introspectionCredentials,
