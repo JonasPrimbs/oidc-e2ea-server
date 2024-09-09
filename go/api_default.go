@@ -670,6 +670,7 @@ func GenerateIct(privateKey interface{}, algorithm jwt.SigningMethod, tokenClaim
 	// Generate ICT
 	ict := jwt.NewWithClaims(algorithm, requestedClaims)
 	ict.Header["kid"] = config.KeyId
+	ict.Header["typ"] = "jwt+ict"
 	iatString, err := ict.SignedString(privateKey)
 	if err != nil {
 		return "", nil, 0, errors.New("failed to sign Identity Certification Token: " + err.Error())
