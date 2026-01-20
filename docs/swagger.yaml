@@ -4,7 +4,7 @@ info:
   description: Endpoint for OpenID Connect's Identity Certification Token.
   version: 0.5.0
 servers:
-- url: http://op.localhost/realms/ict/protocol/openid-connect/ict
+- url: http://op.localhost/realms/ict/protocol/openid-connect/userinfo/ict
 paths:
   /:
     post:
