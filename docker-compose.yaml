@@ -2,7 +2,7 @@
 services:
   # Reverse Proxy (Traefik):
   proxy:
-    image: traefik:v2.10                                          # Use Traefik reverse proxy
+    image: traefik:v3.6                                           # Use Traefik reverse proxy
     restart: unless-stopped                                       # Restore last on/off state after restart
     ports:
       - 80:80/tcp                                                 # Open port 80 (HTTP)
@@ -21,7 +21,7 @@ services:
 
   # Keycloak Database (PostgreSQL):
   db:
-    image: postgres:16-alpine                                     # Use PostgreSQL on Alpine Linux as database for Keycloak
+    image: postgres:18-alpine                                     # Use PostgreSQL on Alpine Linux as database for Keycloak
     restart: unless-stopped                                       # Restore last on/off state after restart
     environment:
       POSTGRES_DB: keycloak                                       # Name database 'keycloak'
@@ -36,7 +36,7 @@ services:
       - userdb:/var/lib/postgresql/data                           # Mount PostgreSQL data to shared Docker Volume 'userdb'
   # OpenID Provider (Keycloak):
   op:
-    image: quay.io/keycloak/keycloak:23.0.4                       # Use Keycloak as OpenID Provider
+    image: quay.io/keycloak/keycloak:26.5.5                       # Use Keycloak as OpenID Provider
     restart: unless-stopped                                       # Restore last on/off state after restart
     depends_on:
       - proxy                                                     # Keycloak requires running reverse proxy
@@ -115,7 +115,7 @@ services:
 
   # Authentik Database (PostgreSQL)
   db2:
-    image: postgres:16-alpine                                     # Use PostgreSQL on Alpine Linux as database for Authentik
+    image: postgres:18-alpine                                     # Use PostgreSQL on Alpine Linux as database for Authentik
     restart: unless-stopped                                       # Restore last on/off state after restart
     environment:
       POSTGRES_DB: authentik                                      # Name database 'authentik'
@@ -128,13 +128,13 @@ services:
       - userdb2:/var/lib/postgresql/data                          # Mount PostgreSQL data to shared Docker Volume 'userdb'
   # Authentik key value storage (Redis)
   redis2:
-    image: docker.io/library/redis:7-alpine
+    image: redis:8-alpine
     restart: unless-stopped
     command: "--save 60 1 --loglevel warning"
     volumes:
       - redis2:/data
   op2:
-    image: ghcr.io/goauthentik/server:2023.10.6
+    image: ghcr.io/goauthentik/server:2026.2.1
     restart: unless-stopped
     depends_on:
       - proxy
@@ -171,7 +171,7 @@ services:
       - op2_media:/media
       - op2_templates:/templates
   op2_worker:
-    image: ghcr.io/goauthentik/server:2023.10.6
+    image: ghcr.io/goauthentik/server:2026.2.1
     restart: unless-stopped
     depends_on:
       - proxy

@@ -1,5 +1,5 @@
 # Generate build container
-FROM golang:1.21 AS build
+FROM golang:1.26 AS build
 
 # Create working directory for source files
 WORKDIR /go/src
