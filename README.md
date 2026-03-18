@@ -1,88 +1,183 @@
-# OpenID Connect GOes E2EA
-
-This repository provides the proof-of-concept implementation of the end-to-end authentication for an OpenID Connect OpenID Provider server.
-
-The provided implementation is written in [Go](https://golang.org/) and implements a REST endpoint for the Identity Certification Token UserInfo endpoint.
-Using a reverse proxy in front, it can be mounted to any OpenID Provider implementation.
+# Open Identity Certification with OpenID Connect (OIDC²) Middleware
+A middleware written in [Go](https://go.dev/) to implement OIDC² as a middleware in front of any OpenID Provider.
 
 **Warning:**
-Keep in mind that this is the implementation of a research project!
+This implementation is a research project!
 We do not guarantee a secure implementation!
 **Do not use this in production!!!**
 
+## 1. How it works
+Use a reverse proxy in front of your OpenID Provider and reroute token requests through the middleware.
 
-## Documentation
-
-This section provides an introduction to the architecture and the configuration of the Identity Certification Token Endpoint.
-
-
-### Architecture
-
-The following figure shows the overall architecture how to use the provided Identity Certification Token (ICT) Endpoint with any OpenID Provider implementation.
+The middleware will forward all regular token requests to the OpenID provider and pass through its response (see Figure 1).
 
 ```
-                           +---------+                +----------+           +----------+
-   /*                      |         |       *        |  OpenID  |           |   User   |
-  -----------------------> |         |--------------->| Provider | <-------> | Database |
-                           |         |                +----------+           +----------+
-                           |         |                  ^
-                           | Reverse |                  | /realms/ict/protocol/openid-
-                           |  Proxy  |                  |   connect/userinfo
-   /realms/ict/protocol/   |         |                +----------+
-     openid-connect/ict    |         |       /        |   ICT    |
-  -----------------------> |         |--------------->| Endpoint |
-                           +---------+                +----------+
+                   +---------+                +--------------------------------+
+                   |         |  /*            |                                |
+                   |         | -------------> |         OpenID Provider        |
+                   |         | <------------- |                                |
+  +--------+       |         |                +--------------------------------+
+  |        |  /*   | Reverse |                            ^        |
+  | Client | ----> |  Proxy  |                            | /token |
+  |        | <---- |         |                            |        V
+  +--------+       |         |                +--------------------------------+
+                   |         |  /token -> /   |                                |
+                   |         | -------------> |        OIDC² Middleware        |
+                   |         | <------------- |                                |
+                   +---------+                +--------------------------------+
 ```
+**Figure 1**: Regular token request.
 
-The Docker Compose composition provided [here](./docker-compose.yaml) uses the following implementations:
+If the client performs a token exchange request `requested_token_type=urn:ietf:params:oauth:token-type:ic-token`, the middleware performs the following steps (see Figure 2):
+
+1. It validates the access token provided in `subject_token` using the OpenID Provider's Token Introspection Endpoint (see [RFC 7662](https://datatracker.ietf.org/doc/rfc7662/)).
+2. If the access token is valid, it generates an Identity Certification Token using the End User's identity claims provided by the OpenID Provider from the UserInfo Endpoint (see [OIDC Core](https://openid.net/specs/openid-connect-core-1_0.html#UserInfo)).
+
+```
+                   +---------+                +--------------------------------+
+                   |         |  /*            |                                |
+                   |         | -------------> |         OpenID Provider        |
+                   |         | <------------- |                                |
+  +--------+       |         |                +--------------------------------+
+  |        |  /*   | Reverse |                  ^            |   ^           |
+  | Client | ----> |  Proxy  |                  | /tokeninfo |   | /userinfo |
+  |        | <---- |         |                  |            V   |           V
+  +--------+       |         |                +--------------------------------+
+                   |         |  /token -> /   |                                |
+                   |         | -------------> |        OIDC² Middleware        |
+                   |         | <------------- |                                |
+                   +---------+                +--------------------------------+
+```
+**Figure 2**: Identity Certification Token request.
+
+## 2. Setup
+The provided [Docker composition](./docker-compose.yaml) contains an example for the following software:
 
 - Reverse Proxy: [Traefik Proxy](https://traefik.io/traefik/)
 - OpenID Provider: [Keycloak](https://www.keycloak.org/)
 - User Database: [PostgreSQL](https://www.postgresql.org/)
-- Identity Certification Token (ICT) Endpoint: An HTTP endpoint written in [GO](https://go.dev/)
 
+First, copy the file [`example.env`](./example.env`) to `.env` and adjust its [configuration](#configuration) parameters:
+```bash
+copy example.env .env
+nano .env
+```
 
-### Server Configuration
+Then, use the following command to run the composition:
+```bash
+# Start the composition in detached mode (-d):
+docker compose up -d
+```
 
-This section describes the configuration parameters of the ICT Endpoint.
-They are applied by injecting them as environment variables to the running application.
-This can be done by defining the variables in the Docker container or by placing an `.env` file in the execution directory.
+To stop the composition, use the following command:
+```bash
+# Stop the composition:
+docker compose down
+```
 
+See step-by-step guide [here](./docs-dev/setup.md).
 
-#### Key File
+## 3. Configuration
+Apply the following configuration options in your `.env` file.
 
-Absolute or relative file path to the OpenID Provider's private key file in PEM format.
+### 3.1. Key Configuration
+To issue a valid Identity Certification Token, the middleware needs a private signing key whose corresponding public key is listed on the OpenID Provider's `jwks_uri`.
+
+#### 3.1.1. Key File
+The PEM-encoded private signing key file path.
 
 Example:
 ```bash
 KEY_FILE="/path/to/private_key.pem"
 ```
 
-Setting this variable is **required**.
+This variable is **required**.
 
-
-#### Key ID
-
-The ID of the OpenID Provider's Public Key provided in the `jwks_uri` endpoint.
+#### 3.1.2. Key ID
+The key ID of the public key listed on the OpenID Provider's `jwks_uri`.
 
 Example 1:
 ```bash
-KID="rojPQoDRx_DD-DFs7y45wDLl5T8b9VmX6iQapIK6cRE"
+KEY_ID="rojPQoDRx_DD-DFs7y45wDLl5T8b9VmX6iQapIK6cRE"
 ```
 
 Example 2:
 ```bash
-KID=1
+KEY_ID=1
 ```
 
-Setting this variable is **required**.
+This variable is **required**.
 
+### 3.2. OpenID Provider Configuration
+To issue valid Identity Certification Tokens, the middleware must know the OpenID Provider's issuer identifier.
+It also needs to know the OpenID Provider's Token Introspection and UserInfo Endpoint to validate token requests and issue correct identity claims.
 
-#### Signing Algorithm
+#### 3.2.1. Issuer Claim
+The issuer identifier (`iss` claim) of issued Identity Certification Tokens.
 
-Signing algorithm for Identity Certification Token signatures.
+Example 1:
+```bash
+ISSUER="https://op.example.com/"
+```
 
-Allowed values are:
+Example 2 (Keycloak running locally):
+```bash
+ISSUER="http://localhost:8080/realms/ict"
+```
+
+This variable is **required**.
+
+#### 3.2.2. Token Introspection Endpoint
+The absolute URI of the OpenID Provider's Token Introspection Endpoint to validate provided access tokens.
+
+Example 1:
+```bash
+INTROSPECTION_ENDPOINT="https://op.example.com/tokeninfo"
+```
+
+Example 2 (Keycloak running locally):
+```bash
+INTROSPECTION_ENDPOINT="http://localhost:8080/realms/ict/protocol/openid-connect/token/introspect"
+```
+
+If not provided, its value falls back to `token_introspection_endpoint` value of the discovery document provided in `{ISSUER}/.well-known/openid-configuration`.
+
+#### 3.2.3. UserInfo Endpoint
+The absolute URI of the OpenID Provider's UserInfo Endpoint to observe the requesting user's identity claims for the Identity Certification Token:
+
+Example 1:
+```bash
+USERINFO_ENDPOINT="https://op.example.com/userinfo"
+```
+
+Example 2 (Keycloak running locally):
+```bash
+USERINFO_ENDPOINT="http://localhost:8080/realms/ict/protocol/openid-connect/userinfo"
+```
+
+If not provided, its value falls back to the `userinfo_endpoint` value of the discovery document provided in `{ISSUER}/.well-known/openid-configuration`.
+
+#### 3.2.4. Token Endpoint
+The absolute URI of the OpenID Provider's Token Endpoint to forward the token request if no Identity Certification Token is requested.
+
+Example 1:
+```bash
+TOKEN_ENDPOINT="https://op.example.com/token"
+```
+
+Example 2 (Keycloak running locally):
+```bash
+TOKEN_ENDPOINT="http://localhost:8080/realms/ict/protocol/openid-connect/token"
+```
+
+If not provided, its value falls back to the `token_endpoint` value of the discovery document provided in `{ISSUER}/.well-known/openid-configuration`.
+
+### 3.3. Token Configuration
+
+#### 3.3.1. Signing Algorithm
+The JSON Web Algorithms (JWA) used for signing the Identity Certification Token.
+
+Available options:
 
 - `RS256` for RSASSA-PKCS1-v1_5 using SHA-256
 - `RS384` for RSASSA-PKCS1-v1_5 using SHA-384
@@ -92,177 +187,47 @@ Allowed values are:
 - `ES512` for ECDSA using P-521 and SHA-512
 - `EdDSA` for Eduard Digital Signing Algorithm using Ed25519 curve
 
-Default Value: `ES256`.
-
 Example:
 ```bash
 ALG="ES256"
 ```
 
+Default value is `RS256`.
 
-#### Userinfo Endpoint
-
-Absolute URI to the OpenID Provider's Userinfo Endpoint.
-
-This URI is used by the ICT Endpoint to request the claims of the Identity Certification Token from the OpenID Provider.
-**Make sure that the running ICT Endpoint can access the OpenID Provider's Userinfo Endpoint via this URI!**
-
-Example 1:
-```bash
-USERINFO="https://openid-provider.sample.org/userinfo"
-```
-
-Example 2 (Keycloak):
-```bash
-USERINFO="http://localhost:8080/realms/ict/protocol/openid-connect/userinfo"
-```
-
-Setting this variable is **required**.
-
-
-#### Token Introspection Endpoint
-
-Absolute URI to the OpenID Provider's Token Introspection Endpoint described in [RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662).
-This URI is provided on the Discovery Endpoint as attribute `introspection_endpoint`.
-**Make sure that the running ICT Endpoint can access the OpenID Provider's Token Introspection Endpoint via this URI!**
-
-Example 1:
-```bash
-TOKEN_INTROSPECTION="https://openid-provider.sample.org/introspect"
-```
-
-Example 2 (Keycloak):
-```bash
-TOKEN_INTROSPECTION="http://localhost:8080/realms/ict/protocol/openid-connect/token/introspect"
-```
-
-Setting this variable is **required**.
-
-
-#### Token Introspection Host
-
-The hostname in HTTP Host Header when requesting the Token Introspection Endpoint.
-If not provided, the hostname from the `TOKEN_INTROSPECTION` URL will be used.
+#### 3.3.2. Token Validity Period
+The Identity Certification Token's validity period in seconds.
 
 Example:
 ```bash
-TOKEN_INTROSPECTION_HOST="openid-provider.sample.org
+TOKEN_PERIOD=300
 ```
 
+Default value is `300` (5 minutes).
 
-#### Token Introspection Credentials
+### 3.4. Hosting Configuration
 
-The HTTP Authorization Header required for the Token Introspection Endpoint.
-Typically a HTTP Basic Authentication Header using the ICT Endpoint's Client Credentials.
-
-Example:
-```bash
-INTROSPECTION_CREDENTIALS="Basic aWN0X2VuZHBvaW50OlMzY3JldCE="
-```
-For Client ID `ict_endpoint` and Client Secret `S3cret!`
-
-Setting this variable is **required**, except the OpenID Provider does not requires any authorization for the Token Introspection Endpoint (not recommended).
-
-
-#### Context Prefix
-
-Prefix of scopes which indicate the granted end-to-end authentication context.
-
-Default Value: `e2e_ctx_`.
-
-Example:
-```bash
-CONTEXT_PREFIX="ctx_"
-```
-The scope `ctx_email` will authorize the End-User for the `email` context.
-
-
-#### Issuer Claim
-
-The Identity Certification Token's Issuer.
-
-This is the value of the `iss` claim of the issued Identity Certification Token.
-Typically, this is the public URI of the OpenID Provider where `.well-known/openid-configuration` is added to request the OpenID configuration.
-
-Example 1:
-```bash
-ISSUER="https://accounts.sample.org/"
-```
-
-Example 2:
-```bash
-ISSUER="http://localhost:8080/realms/ict"
-```
-
-Setting this variable is **required**.
-
-
-#### Token Validity Period
-
-The Identity Certification Token's default validity period in seconds.
-
-Default Value: `3600` (1 hour).
-
-Example:
-```bash
-DEFAULT_TOKEN_PERIOD=3600
-```
-
-
-#### Maximum Token Validity Period
-
-The Identity Certification Token's maximum validity period in seconds.
-If the requested token period is longer than this value, this value is used.
-
-Default Value: `2592000` (30 days).
-
-Example:
-```bash
-MAX_TOKEN_PERIOD=2592000
-```
-
-
-#### Port
-
-The Port where the endpoint is running on.
-
-Default Value: `8080`.
+#### 3.4.1. Port
+The port to listen to.
 
 Example:
 ```bash
 PORT=8080
 ```
 
+Default value is `8080`.
 
-#### Database File
+### 3.4.2. Hosts
+Comma-separated hosts in CIDR format to listen to.
 
-The SQLite database file to store used nonce values in.
-
-Default Value (standalone): `./db.sqlite`
-<br>
-Default Value (Docker image): `/config/db.sqlite`
-
-Example:
+Example (localhost only):
 ```bash
-DB_SQLITE_FILE="/config/db.sqlite"
+HOSTS=127.0.0.1,::1
 ```
 
+Default value is `0.0.0.0/0` (all hosts).
 
-### REST Endpoint
+## 4. REST Documentation
+The [OpenAPI](https://swagger.io/specification/) documentation of the RESTful API is provided [here](./api/oidc2middleware.yaml).
 
-The REST API is described in the OpenAPI format provided [here](./docs/openapi.yaml).
-
-
-### Environment Setup
-
-To setup a test environment locally, refer to the manual [here](./docs-dev/environment-setup.md).
-
-
-### Testing
-
+## 5. Testing
 To play around with the API, check out the testing manual [here](./docs-dev/testing.md).
-
-
-### Security
-
-To improve the security of a deployment, check out the security manual [here](./docs-dev/security.md).

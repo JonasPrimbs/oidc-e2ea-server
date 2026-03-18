@@ -1,11 +1,12 @@
 /*
- * OIDC² - Identity Certification Token Endpoint
+ * Open Identity Certification with OpenID Connect (OIDC²)
  *
- * Endpoint for OpenID Connect's Identity Certification Token endpoint.
+ * Authorization Server middleware for requesting Identity Certification Tokens (ICT).
  *
- * API version: 0.5.0
+ * API version: 0.2.0
+ * Contact: mail@jonasprimbs.de
  */
-package ict
+package oidc2middleware
 
 import (
 	"log"

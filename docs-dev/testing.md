@@ -1,14 +1,11 @@
 # Testing
-
 In the `realm-export.json` are already client applications included to test the API with
 
 - [API Specification](#testing-with-api-specification) or
 - [Swagger Editor](#testing-with-swagger-editor) or
 - [Postman](#testing-with-postman).
 
-
 ## Request Token JWT Generation
-
 To create a sufficient Token Request JWT, you can go to [JWT.io (external URL)](https://jwt.io) and create one.
 You can use the ES256 private key from the [key examples (external repository)](https://github.com/JonasPrimbs/draft-ietf-mla-oidc/tree/main/examples/key-examples.md#private-key) to sign your key or use the [code example (external repository)](https://github.com/JonasPrimbs/draft-ietf-mla-oidc/tree/main/examples/code-examples.md#key-pair-generation-and-export) to generate a new one.
 You can also use the Token Request JWT from the [communication examples (external repository)](https://github.com/JonasPrimbs/draft-ietf-mla-oidc/tree/main/examples/communication-examples.md#token-request) as template.
@@ -51,9 +48,7 @@ and the following payload (without comments):
 }
 ```
 
-
 ## Testing with API Specification
-
 You can test the infrastructure with our API documentation.
 This is recommended if you want to play with the API.
 
@@ -105,9 +100,7 @@ Now you can perform requests to the server as follows:
 
 </details>
 
-
 ## Testing with Swagger Editor
-
 You can test the infrastructure with Swagger Editor.
 This is recommended while editing the API Specification.
 
@@ -159,9 +152,7 @@ Now you can perform requests to the server as follows:
 
 </details>
 
-
 ## Testing with Postman
-
 You can test the infrastructure with Postman.
 
 Therefore, you must authorize Postman as follows:

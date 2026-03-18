@@ -1,18 +1,38 @@
 /*
- * OIDC² - Identity Certification Token Endpoint
+ * Open Identity Certification with OpenID Connect (OIDC²)
  *
- * Endpoint for OpenID Connect's Identity Certification Token endpoint.
+ * Authorization Server middleware for requesting Identity Certification Tokens (ICT).
  *
- * API version: 0.5.0
+ * API version: 0.2.0
+ * Contact: mail@jonasprimbs.de
  */
-package ict
+package oidc2middleware
 
-// Information about ocurred error.
+// ErrorStatus - Generic error status response
 type ErrorStatus struct {
-	// Status Code
-	Code int `json:"code"`
-	// Status Text
-	Status string `json:"status"`
-	// More detailed description
-	Description string `json:"description,omitempty"`
+
+	// Error code identifying the error condition
+	Error string `json:"error"`
+
+	// Human-readable ASCII encoded text providing additional information about the error
+	ErrorDescription string `json:"error_description,omitempty"`
+}
+
+// AssertErrorStatusRequired checks if the required fields are not zero-ed
+func AssertErrorStatusRequired(obj ErrorStatus) error {
+	elements := map[string]interface{}{
+		"error": obj.Error,
+	}
+	for name, el := range elements {
+		if isZero := IsZeroValue(el); isZero {
+			return &RequiredError{Field: name}
+		}
+	}
+
+	return nil
+}
+
+// AssertErrorStatusConstraints checks if the values respects the defined constraints
+func AssertErrorStatusConstraints(obj ErrorStatus) error {
+	return nil
 }

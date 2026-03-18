@@ -1,0 +1,334 @@
+openapi: 3.1.1
+info:
+  contact:
+    email: mail@jonasprimbs.de
+    name: Jonas Primbs
+  description: Authorization Server middleware for requesting Identity Certification
+    Tokens (ICT).
+  license:
+    name: GNU General Public License v3.0
+    url: https://github.com/JonasPrimbs/oidc-e2ea-server/blob/main/LICENSE
+  title: Open Identity Certification with OpenID Connect (OIDC²)
+  version: 0.2.0
+servers:
+- description: Publicly accessible API endpoint for testing with the OIDC E2E Test
+    Environment.
+  url: https://op.oidc-e2e.primbs.dev/realms/koala/protocol/openid-connect/token
+- description: "Local development API endpoint for testing with a local OpenID Provider\
+    \ (e.g., Keycloak)."
+  url: http://op.localhost/realms/koala/protocol/openid-connect/token
+paths:
+  /:
+    description: |
+      This is the endpoint for requesting tokens from the authorization server.
+      The application proxies all requests to the authorization server except token exchange requests for an Identity Certification Token, which are handled by the application itself.
+    options:
+      description: |
+        This method is used for CORS preflight requests. It responds with appropriate CORS headers to allow cross-origin requests from authorized origins.
+      operationId: tokenRequestPreflight
+      responses:
+        "204":
+          description: "No content, CORS preflight successful"
+          headers:
+            Access-Control-Allow-Origin:
+              example: https://client.example.com
+              explode: false
+              schema:
+                type: string
+              style: simple
+            Access-Control-Allow-Methods:
+              example: "POST, OPTIONS"
+              explode: false
+              schema:
+                type: string
+              style: simple
+            Access-Control-Allow-Headers:
+              example: "Content-Type, Authorization"
+              explode: false
+              schema:
+                type: string
+              style: simple
+            Access-Control-Max-Age:
+              example: 86400
+              explode: false
+              schema:
+                format: int64
+                type: integer
+              style: simple
+      summary: CORS preflight request
+    post:
+      description: |
+        This method proxies all token requests to the authorization server except token exchange requests for an Identity Certification Token.
+        If an Identity Certification Token is requested, the application validates the request and generates the token itself if the request is valid.
+      operationId: tokenRequest
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/tokenRequest_request"
+        description: "OAuth 2.0 Token Request body compliant with RFC 6749, RFC 8693,\
+          \ RFC 9449, and OpenID Connect Core 1.0"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/tokenRequest_200_response"
+          description: Token successfully issued
+          headers:
+            Cache-Control:
+              example: no-store
+              explode: false
+              schema:
+                type: string
+              style: simple
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponseError"
+          description: Invalid request or invalid grant
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponseError"
+          description: Client authentication failed
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponseError"
+          description: Client unauthorized to use this grant type or insufficient
+            scope
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorStatus"
+          description: Too many requests
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorStatus"
+          description: Server error
+      security:
+      - {}
+      - client_basic_auth: []
+      summary: Request a token.
+    summary: The token endpoint.
+components:
+  schemas:
+    TokenResponseError:
+      description: Error status response compliant with RFC 6749 and OpenID Connect
+        Core 1.0
+      example:
+        error_description: error_description
+        error: invalid_request
+        error_uri: https://openapi-generator.tech
+      properties:
+        error:
+          description: Error code as defined in RFC 6749 and OpenID Connect Core 1.0
+          enum:
+          - invalid_request
+          - invalid_client
+          - invalid_grant
+          - unauthorized_client
+          - unsupported_grant_type
+          - invalid_scope
+          - invalid_target
+          - unsupported_token_type
+          - authorization_pending
+          - slow_down
+          - access_denied
+          - expired_token
+          - use_dpop_nonce
+          - invalid_dpop_proof
+          - interaction_required
+          - login_required
+          - account_selection_required
+          type: string
+        error_description:
+          description: Human-readable ASCII encoded text providing additional information
+            about the error
+          type: string
+        error_uri:
+          description: URI identifying a human-readable web page with information
+            about the error
+          format: uri
+          type: string
+      required:
+      - error
+    ErrorStatus:
+      description: Generic error status response
+      example:
+        error_description: error_description
+        error: method_not_allowed
+      properties:
+        error:
+          description: Error code identifying the error condition
+          enum:
+          - method_not_allowed
+          - too_many_requests
+          - server_error
+          type: string
+        error_description:
+          description: Human-readable ASCII encoded text providing additional information
+            about the error
+          type: string
+      required:
+      - error
+    tokenRequest_request:
+      properties:
+        grant_type:
+          description: REQUIRED. The grant type being used.
+          enum:
+          - authorization_code
+          - password
+          - client_credentials
+          - refresh_token
+          - urn:ietf:params:oauth:grant-type:device_code
+          - urn:ietf:params:oauth:grant-type:jwt-bearer
+          - urn:ietf:params:oauth:grant-type:saml2-bearer
+          - urn:ietf:params:oauth:grant-type:ciba
+          - urn:ietf:params:oauth:grant-type:token-exchange
+          type: string
+        client_id:
+          description: REQUIRED. Client identifier.
+          pattern: "^[!-~]+$"
+          type: string
+        code:
+          description: REQUIRED for authorization_code grant.
+          pattern: "^[!-~]+$"
+          type: string
+        redirect_uri:
+          description: REQUIRED if included in authorization request.
+          pattern: "^[a-z][a-z0-9+.-]*:\\/\\/([^#\\s]+)$"
+          type: string
+        client_secret:
+          description: Required for confidential clients.
+          pattern: "^[!-~]+$"
+          type: string
+        refresh_token:
+          description: REQUIRED for refresh_token grant.
+          pattern: "^[a-zA-Z0-9._~\\-\\/+=]+$"
+          type: string
+        scope:
+          description: OPTIONAL. Space-delimited scope values.
+          pattern: "^[!#-\\[\\]-~]+$"
+          type: string
+        resource:
+          description: OPTIONAL (RFC 8693). Target API resource.
+          pattern: "^[!-~]+$"
+          type: string
+        audience:
+          description: OPTIONAL. Intended audience for the token.
+          pattern: "^[a-z][a-z0-9+.-]*:\\/\\/([^#\\s]+)$"
+          type: string
+        subject_token:
+          description: OPTIONAL (RFC 8693). Subject token for token exchange.
+          pattern: "^[a-zA-Z0-9._~\\-\\/+=]+$"
+          type: string
+        subject_token_type:
+          description: OPTIONAL (RFC 8693). Subject token type identifier.
+          pattern: "^urn:[a-z0-9][a-z0-9-]{0,31}:[a-zA-Z0-9()+,\\-.:=@;$_!*'%/?#]+$"
+          type: string
+        actor_token:
+          description: OPTIONAL (RFC 8693). Actor token for delegation.
+          pattern: "^[a-zA-Z0-9._~\\-\\/+=]+$"
+          type: string
+        actor_token_type:
+          description: OPTIONAL (RFC 8693). Actor token type identifier.
+          pattern: "^urn:[a-z0-9][a-z0-9-]{0,31}:[a-zA-Z0-9()+,\\-.:=@;$_!*'%/?#]+$"
+          type: string
+        dpop:
+          description: OPTIONAL (RFC 9449). DPoP proof JWT.
+          pattern: "^[a-zA-Z0-9\\-_]+\\.[a-zA-Z0-9\\-_]+\\.[a-zA-Z0-9\\-_]+$"
+          type: string
+      required:
+      - client_id
+      - grant_type
+    tokenRequest_200_response:
+      example:
+        id_token: id_token
+        token_type: Bearer
+        client_id: client_id
+        access_token: access_token
+        refresh_token: refresh_token
+        dpop_jkt: dpop_jkt
+        c_hash: c_hash
+        issued_token_type: issued_token_type
+        scope: scope
+        not-before-policy: 0
+        state: state
+        expires_in: 3600
+        requested_token_type: requested_token_type
+      properties:
+        access_token:
+          description: The access token issued by the authorization server.
+          pattern: "^[a-zA-Z0-9._~\\-\\/+=]+$"
+          type: string
+        token_type:
+          description: Token type (typically "Bearer" or "DPoP").
+          enum:
+          - Bearer
+          - DPoP
+          - N_A
+          type: string
+        expires_in:
+          description: Lifetime in seconds of the access token.
+          example: 3600
+          format: int64
+          type: integer
+        refresh_token:
+          description: Refresh token for obtaining new access tokens.
+          pattern: "^[a-zA-Z0-9._~\\-\\/+=]+$"
+          type: string
+        scope:
+          description: Scope of the access token.
+          pattern: "^[!#-\\[\\]-~]+$"
+          type: string
+        id_token:
+          description: OPTIONAL (OpenID Connect). ID Token (JWT).
+          pattern: "^[a-zA-Z0-9\\-_]+\\.[a-zA-Z0-9\\-_]+\\.[a-zA-Z0-9\\-_]+$"
+          type: string
+        dpop_jkt:
+          description: OPTIONAL (RFC 9449). DPoP proof key thumbprint.
+          pattern: "^[a-zA-Z0-9\\-_]{43}$"
+          type: string
+        c_hash:
+          description: OPTIONAL (OpenID Connect). Code hash for authorization code
+            flow.
+          pattern: "^([a-zA-Z0-9\\-_]{22}|[a-zA-Z0-9\\-_]{32}|[a-zA-Z0-9\\-_]{43})$"
+          type: string
+        issued_token_type:
+          description: OPTIONAL (RFC 8693). The type of the issued token.
+          pattern: "^urn:ietf:params:oauth:token-type:[a-zA-Z0-9._\\-]+$"
+          type: string
+        requested_token_type:
+          description: OPTIONAL (RFC 8693). The type of the requested token for confirmation.
+          pattern: "^urn:ietf:params:oauth:token-type:[a-zA-Z0-9._\\-]+$"
+          type: string
+        state:
+          description: OPTIONAL. State value from the authorization request.
+          pattern: "^[a-zA-Z0-9._~\\-]{8,512}$"
+          type: string
+        client_id:
+          description: OPTIONAL. Client identifier for which the token was issued
+            for confirmation.
+          pattern: "^[!-~]+$"
+          type: string
+        not-before-policy:
+          description: OPTIONAL (proprietary for Keycloak). The time before which
+            the token MUST NOT be accepted for processing.
+          format: int64
+          type: integer
+      required:
+      - access_token
+      - token_type
+  securitySchemes:
+    client_basic_auth:
+      description: HTTP Basic Authentication for client authentication
+      scheme: basic
+      type: http

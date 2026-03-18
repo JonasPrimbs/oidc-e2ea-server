@@ -1,19 +1,20 @@
 /*
- * OIDC² - Identity Certification Token Endpoint
+ * Open Identity Certification with OpenID Connect (OIDC²)
  *
- * Endpoint for OpenID Connect's Identity Certification Token endpoint.
+ * Authorization Server middleware for requesting Identity Certification Tokens (ICT).
  *
- * API version: 0.5.0
+ * API version: 0.2.0
+ * Contact: mail@jonasprimbs.de
  */
-package ict
+package oidc2middleware
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gorilla/mux"
 )
 
+// A Route defines the parameters for an api endpoint
 type Route struct {
 	Name        string
 	Method      string
@@ -21,36 +22,30 @@ type Route struct {
 	HandlerFunc http.HandlerFunc
 }
 
-type Routes []Route
+// Routes is a map of defined api endpoints
+type Routes map[string]Route
 
-func NewRouter() *mux.Router {
+// Router defines the required methods for retrieving api routes
+type Router interface {
+	Routes() Routes
+	OrderedRoutes() []Route
+}
+
+// NewRouter creates a new router for any number of api routers
+func NewRouter(routers ...Router) *mux.Router {
 	router := mux.NewRouter().StrictSlash(true)
-	for _, route := range routes {
-		var handler http.Handler
-		handler = route.HandlerFunc
-		handler = Logger(handler, route.Name)
+	for _, api := range routers {
+		for _, route := range api.OrderedRoutes() {
+			var handler http.Handler = route.HandlerFunc
+			handler = Logger(handler, route.Name)
 
-		router.
-			Methods(route.Method).
-			Path(route.Pattern).
-			Name(route.Name).
-			Handler(handler)
+			router.
+				Methods(route.Method).
+				Path(route.Pattern).
+				Name(route.Name).
+				Handler(handler)
+		}
 	}
 
 	return router
-}
-
-var routes = Routes{
-	Route{
-		"GenIct",
-		strings.ToUpper("Post"),
-		"/",
-		GenIct,
-	},
-	Route{
-		"IctOptions",
-		strings.ToUpper("Options"),
-		"/",
-		IctOptions,
-	},
 }

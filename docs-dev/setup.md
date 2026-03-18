@@ -1,4 +1,4 @@
-# Environment Setup
+# Setup
 
 This section describes how to setup a test environment locally with Docker Compose.
 
