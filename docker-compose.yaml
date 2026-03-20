@@ -1,268 +1,374 @@
-# Shared Docker Services:
 services:
+  # Internal Certificate Authority (Step-CA):
+  ca:
+    image: smallstep/step-ca:${STEP_CA_VERSION:-0.30.1} # Use Smallstep CA image from Docker Hub
+    profiles:
+      - test
+      - dev
+    restart: unless-stopped
+    networks:
+      # Network to reverse proxy for ACME TLS-ALPN-01 challenge:
+      ca_proxy:
+        ipv4_address: ${NETWORK_CA_PROXY_CA:-172.20.0.2}
+    extra_hosts:
+      - "${OP_HOST:-op.localhost}=${NETWORK_CA_PROXY_PROXY:-172.20.0.3}" # Map OP_HOST to host gateway for ACME TLS-ALPN-01 challenge
+    environment:
+      DOCKER_STEPCA_INIT_NAME: ${CA_NAME:-ca.localhost} # The CA's hostname
+      DOCKER_STEPCA_INIT_DNS_NAMES: ${OP_HOST:-op.localhost} # List of hostnames to issue certificates for
+      DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT: false # Disable remote management API for security hardening
+      DOCKER_STEPCA_INIT_ACME: true # Enable ACME support
+      DOCKER_STEPCA_INIT_PASSWORD_FILE: /run/secrets/ca_password # Password secret file to encrypt private keys with
+    secrets:
+      - ca_password # CA private keys secret password
+      - root_ca.crt # The intermediate CA certificate file
+      - root_ca_key # The intermediate CA private key file
+      - root_ca_key_password # The intermediate CA private key password file
+    volumes:
+      - ./ca/authorities/:/home/step/authorities/:ro # The policy and settings files
+      - ./.secrets/ca/db/:/home/step/db/:rw # The CA database for issued certificates
+      - ./ca/config/:/home/step/config/:ro # The common configuration files and defaults
+
   # Reverse Proxy (Traefik):
-  proxy:
-    image: traefik:v3.6                                           # Use Traefik reverse proxy
-    restart: unless-stopped                                       # Restore last on/off state after restart
+  proxy-prod:
+    image: traefik:${TRAEFIK_VERSION:-v3.6}
+    profiles:
+      - prod
+    restart: unless-stopped
     ports:
-      - 80:80/tcp                                                 # Open port 80 (HTTP)
-      # - 443:443/tcp                                               # Open port 443 (HTTPS)
+      - 80:80/tcp # HTTP
+      - 443:443/tcp # HTTPS
+      - 443:443/udp # HTTP/3
     networks:
-      - proxy
+      # Network to OpenID Provider:
+      proxy_op:
+        ipv4_address: ${NETWORK_PROXY_OP_PROXY:-172.20.0.10}
+      # Network to OIDC² middleware:
+      proxy_oidc2middleware:
+        ipv4_address: ${NETWORK_PROXY_OIDC2MIDDLEWARE_PROXY:-172.20.0.26}
     command:
-      - "--accesslog=true"                                        # Log access for debugging
-      - "--entrypoints.web.address=:80/tcp"                       # Use port 80 as entypoint 'web'
-      # - "--entrypoints.websecure.address=:443/tcp"                # Use port 443 as entypoint 'websecure'
-      - "--providers.docker=true"                                 # Enable Docker provider to handle requests to services
+      - "--accesslog=true"
+      - "--log.level=INFO"
+      - "--entrypoints.web.address=:80/tcp" # HTTP entrypoint
+      - "--entrypoints.web.redirections.entrypoint.to=websecure" # Permanently redirect HTTP to HTTPS
+      - "--entrypoints.websecure.address=:443" # HTTPS entrypoint
+      - "--entrypoints.websecure.http3=true" # Enable HTTP/3 on HTTPS entrypoint
+      - "--entrypoints.websecure.http3.advertisedport=443" # Advertise port 443/udp for HTTP/3
+      - "--entrypoints.websecure.http.tls=true" # Enable TLS on HTTPS entrypoint
+      - "--entrypoints.websecure.http.tls.certresolver=letsencrypt" # Use Let's Encrypt for TLS certificate resolution
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true" # Use TLS-ALPN-01 challenge for certificate resolution
+      - "--certificatesresolvers.letsencrypt.acme.profile=shortlived" # Use Let's Encrypt short lived certificate profile (160h lifetime)
+      - "--certificatesresolvers.letsencrypt.acme.storage=/certs/acme.json" # Store Let's Encrypt certificates in mounted volume
+      - "--certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL:-admin@example.com}" # Email for Let's Encrypt registration
+      - "--providers.docker=true" # Enable Docker provider
       - "--providers.docker.endpoint=unix:///var/run/docker.sock" # Path to docker socket to listen to new services
-      - "--providers.docker.exposedbydefault=false"               # Do not expose every service by default
+      - "--providers.docker.exposedbydefault=false" # Do not expose every service by default
+      - "--providers.docker.network=proxy" # User 'proxy' network as default network
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro              # Mount host's docker socket read-only
-
-  # Keycloak Database (PostgreSQL):
-  db:
-    image: postgres:18-alpine                                     # Use PostgreSQL on Alpine Linux as database for Keycloak
-    restart: unless-stopped                                       # Restore last on/off state after restart
-    environment:
-      POSTGRES_DB: keycloak                                       # Name database 'keycloak'
-      POSTGRES_USER_FILE: /run/secrets/db_username                # Set database username to Docker Secret 'db_username'
-      POSTGRES_PASSWORD_FILE: /run/secrets/db_password            # Set database password to Docker Secret 'db_password'
-    networks:
-      - proxy
-    secrets:
-      - db_username                                               # Use shared Docker Secret 'db_username'
-      - db_password                                               # Use shared Docker Secret 'db_password'
-    volumes:
-      - userdb:/var/lib/postgresql/data                           # Mount PostgreSQL data to shared Docker Volume 'userdb'
-  # OpenID Provider (Keycloak):
-  op:
-    image: quay.io/keycloak/keycloak:26.5.5                       # Use Keycloak as OpenID Provider
-    restart: unless-stopped                                       # Restore last on/off state after restart
+      - /var/run/docker.sock:/var/run/docker.sock:ro # Mount host's docker socket for service discovery
+      - ./.secrets/certs:/certs:rw # Mount local directory for Let's Encrypt certificate storage
+  proxy-test:
+    image: traefik:${TRAEFIK_VERSION:-v3.6}
+    profiles:
+      - test
+      - dev
+    restart: unless-stopped
     depends_on:
-      - proxy                                                     # Keycloak requires running reverse proxy
-      - db                                                        # Keycloak requires running database
+      - ca # Internal CA
+    ports:
+      - 80:80/tcp # HTTP
+      - 443:443/tcp # HTTPS
+      - 443:443/udp # HTTP/3
     networks:
-      - proxy
-    labels:
-      - traefik.enable=true                                       # Enable Traefik reverse proxy exposure
-      - traefik.http.routers.op.entrypoints=web                   # Enable exposure via HTTP entrypoint 'web'
-      - traefik.http.routers.op.rule=Host(`${OP_HOST}`)           # Specify routing via hostname provided in environment variable 'OP_HOST'
-      - traefik.http.routers.op.priority=1                        # Set priority low (traefik.http.routers.ict.priority must be higher)
-    environment:
-      KC_DB: postgres                                             # Use a PostgreSQL database
-      KC_DB_URL: jdbc:postgresql://db:5432/keycloak               # Specify JDBC URL to the PostgreSQL database ('db' = name of Keycloak Database service, 'keycloak' must be POSTGRES_DB of the Keycloak Database service)
-      KC_PROXY: edge                                              # Configure Keycloak to run behind a reverse proxy with unencrypted HTTP between proxy and Keycloak
-    env_file:
-      - ./.secrets/op.env                                         # Include secrets from generated environment variables
+      # Network to reverse proxy for ACME TLS-ALPN-01 challenge:
+      ca_proxy:
+        ipv4_address: ${NETWORK_CA_PROXY_PROXY:-172.20.0.3}
+      # Network to OpenID Provider:
+      proxy_op:
+        ipv4_address: ${NETWORK_PROXY_OP_PROXY:-172.20.0.10}
+      # Network to OIDC² middleware:
+      proxy_oidc2middleware:
+        ipv4_address: ${NETWORK_PROXY_OIDC2MIDDLEWARE_PROXY:-172.20.0.26}
     command:
-      - "start-dev"
-      - "--hostname-strict=false"
-      - "--import-realm"        # Run Keycloak in development mode
-    secrets:
-      - db_username                                               # Use shared Docker Secret 'db_username'
-      - db_password                                               # Use shared Docker Secret 'db_password'
+      - "--accesslog=true"
+      - "--log.level=DEBUG"
+      - "--entrypoints.web.address=:80/tcp" # HTTP entrypoint
+      - "--entrypoints.web.redirections.entrypoint.to=websecure" # Permanently redirect HTTP to HTTPS
+      - "--entrypoints.websecure.address=:443" # HTTPS entrypoint
+      - "--entrypoints.websecure.http3=true" # Enable HTTP/3 on HTTPS entrypoint
+      - "--entrypoints.websecure.http3.advertisedport=443" # Advertise port 443/udp for HTTP/3
+      - "--entrypoints.websecure.http.tls=true" # Enable TLS on HTTPS entrypoint
+      - "--entrypoints.websecure.http.tls.certresolver=stepca" # Use Let's Encrypt for TLS certificate resolution
+      - "--certificatesresolvers.stepca.acme.tlschallenge=true" # Use TLS-ALPN-01 challenge for certificate resolution
+      - "--certificatesresolvers.stepca.acme.profile=shortlived" # Use Let's Encrypt short lived certificate profile (160h lifetime)
+      - "--certificatesresolvers.stepca.acme.storage=/certs/acme.json" # Store Let's Encrypt certificates in mounted volume
+      - "--certificatesresolvers.stepca.acme.email=${LETSENCRYPT_EMAIL:-admin@example.com}" # Email for Let's Encrypt registration
+      - "--providers.docker=true" # Enable Docker provider
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock" # Path to docker socket to listen to new services
+      - "--providers.docker.exposedbydefault=false" # Do not expose every service by default
+      - "--providers.docker.network=proxy" # User 'proxy' network as default network
     volumes:
-      - ./keycloak:/opt/keycloak/data/import:ro
-  # ICT endpoint for Keycloak (this Go application):
-  ict:
-    # # For testing:
-    # image: jonasprimbs/oidc-e2ea-server:latest                    # Use latest image from Docker Hub
-    # For development:
-    build:
-      context: ./                                                 # Use this repository directory as context
-      dockerfile: Dockerfile                                      # Use 'Dockerfile' from context directory
-    # For both:
-    restart: unless-stopped                                       # Restore last on/off state after restart
+      - /var/run/docker.sock:/var/run/docker.sock:ro # Mount host's docker socket for service discovery
+
+  # OpenID Provider (Keycloak):
+  op-prod:
+    image: quay.io/keycloak/keycloak:${KEYCLOAK_VERSION:-26.5.6}
+    profiles:
+      - prod
+    restart: unless-stopped
     depends_on:
-      - proxy                                                     # ICT endpoint requires running reverse proxy
-      - op                                                        # ICT endpoint requires running OpenID Provider
+      - proxy-prod
+      - op_db
     networks:
-      - proxy
+      # Network to reverse proxy:
+      proxy_op:
+        ipv4_address: ${NETWORK_PROXY_OP_OP:-172.20.0.11}
+      # Network to database:
+      op_db:
+        ipv4_address: ${NETWORK_OP_DB_OP:-172.20.0.18}
     labels:
-      - traefik.enable=true                                       # Enable Traefik reverse proxy exposure
-      - traefik.http.routers.ict.entrypoints=web                  # Enable exposure via HTTP entrypoint 'web'
-      - >-                                                        # Specify routing via hostname provided in environment variable 'OP_HOST' and append it to userinfo endpoint
-        traefik.http.routers.ict.rule=(Host(`${OP_HOST}`) &&
-        PathPrefix(`/realms/ict/protocol/openid-connect/userinfo/ict`))
-      - traefik.http.routers.ict.priority=2                       # Set priority high (traefik.http.routers.op.priority must be lower)
-      - traefik.http.routers.ict.middlewares=ict@docker,ictheaders@docker # Include 'ict' middleware from Docker labels below 
-      - >-                                                        # Remove .../userinfo/ict path from request
-        traefik.http.middlewares.ict.replacepathregex.regex=^/realms/ict/protocol/openid-connect/userinfo/ict(.*)
-      - >-                                                        # Forward only path after .../userinfo/ict (marked with '(.*)') in request to ICT endpoint
-        traefik.http.middlewares.ict.replacepathregex.replacement=$$1
-      - traefik.http.middlewares.ictheaders.headers.customResponseHeaders.Access-Control-Allow-Origin=http://localhost:4200,https://editor.swagger.io
-      - traefik.http.routers.ict.service=ict
-      - traefik.http.services.ict.loadbalancer.server.port=8080
+      - traefik.enable=true
+      - traefik.http.routers.op.entrypoints=websecure
+      - traefik.http.routers.op.rule=Host(`${OP_HOST:-op.example.com}`)
+      - traefik.http.routers.op.priority=1
+      - traefik.http.routers.op.service=op
+      - traefik.http.services.op.loadbalancer.server.url=http://${NETWORK_PROXY_OP_OP:-172.20.0.11}:8080
     environment:
-      KEY_FILE: /run/secrets/op_private_key                       # Set private key file to Docker Secret 'op_private_key'
-      ALG: RS256                                                  # Configure RSA with SHA256 (RS256) as signature algorithm for ID Assertion Tokens
-      USERINFO: >-                                                # Configure userinfo endpoint ('op' is the Docker-internal hostname of OpenID Provider service)
-        http://op:8080/realms/ict/protocol/openid-connect/userinfo
-      USERINFO_HOST: op.localhost
-      TOKEN_INTROSPECTION: >-
-        http://op:8080/realms/ict/protocol/openid-connect/token/introspect
-      TOKEN_INTROSPECTION_HOST: op.localhost
-      INTROSPECTION_CREDENTIALS: ${ICT_CREDENTIALS}               # HTTP Basic Authentication Client Credentials of ICT Endpoint
-      CONTEXT_PREFIX: e2e_auth_
-      ISSUER: http://${OP_HOST}/realms/ict                        # Configure issuer of issued ID Assertion Tokens
-      DEFAULT_TOKEN_PERIOD: 3600                                  # Configure the default lifetime of issued ID Assertion Tokens in seconds (3600s = 1h)
-      MAX_TOKEN_PERIOD: 2592000                                   # Configure the maximum lifetime of issued ID Assertion Tokens in seconds (2592000s = 30d)
-      PORT: 8080                                                  # Configure the internal port on which the ICT endpoint is listening
+      KC_DB: postgres # Use a PostgreSQL database
+      KC_DB_URL: jdbc:postgresql://${NETWORK_OP_DB_DB:-172.20.0.19}:5432/keycloak # PostgreSQL database connection string
+      KC_DB_USERNAME_FILE: /run/secrets/op_db_username # Database username secret file
+      KC_DB_PASSWORD_FILE: /run/secrets/op_db_password # Database password secret file
+      KC_HOSTNAME: ${OP_HOST:-op.example.com} # Proxied hostname
+      KC_PROXY_HEADERS: xforwarded # Expect X-Forwarded-* headers from reverse proxy
     env_file:
-      - ./.secrets/ict.env                                        # Include secrets from generated environment variables
+      - ./.secrets/op.env # Load admin's initial username and password from generated environment file
+    command:
+      - "start" # Start in production mode
+      - "--optimized" # Load optimized defaults
+      - "--import-realm" # Import realm configuration
     secrets:
-      - op_private_key                                            # Use shared Docker Secret 'op_private_key'
+      - op_db_username
+      - op_db_password
+    volumes:
+      - ./keycloak/realms/:/opt/keycloak/data/import/:ro # Default realm configuration to import
+  op-test:
+    image: quay.io/keycloak/keycloak:${KEYCLOAK_VERSION:-26.5.6}
+    profiles:
+      - test
+      - dev
+    restart: unless-stopped
+    depends_on:
+      - proxy-test
+      - op_db
+    networks:
+      # Network to reverse proxy:
+      proxy_op:
+        ipv4_address: ${NETWORK_PROXY_OP_OP:-172.20.0.11}
+      # Network to database:
+      op_db:
+        ipv4_address: ${NETWORK_OP_DB_OP:-172.20.0.18}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.op.entrypoints=websecure
+      - traefik.http.routers.op.rule=Host(`${OP_HOST:-op.localhost}`)
+      - traefik.http.routers.op.priority=1
+      - traefik.http.routers.op.service=op
+      - traefik.http.services.op.loadbalancer.server.url=http://${NETWORK_PROXY_OP_OP:-172.20.0.11}:8080
+    environment:
+      KC_DB: postgres # Use a PostgreSQL database
+      KC_DB_URL: jdbc:postgresql://${NETWORK_OP_DB_DB:-172.20.0.19}:5432/keycloak # PostgreSQL database connection string
+      KC_DB_USERNAME_FILE: /run/secrets/op_db_username # Database username secret file
+      KC_DB_PASSWORD_FILE: /run/secrets/op_db_password # Database password secret file
+      KC_HOSTNAME: ${OP_HOST:-op.localhost} # Proxied hostname
+      KC_PROXY_HEADERS: xforwarded # Expect X-Forwarded-* headers from reverse proxy
+    env_file:
+      - ./.secrets/op.env # Load admin's initial username and password from generated environment file
+    command:
+      - "start-dev" # Start in development mode
+      - "--import-realm" # Import realm configuration
+    secrets:
+      - op_db_username
+      - op_db_password
+    volumes:
+      - ./keycloak/realms/:/opt/keycloak/data/import/:ro # Default realm configuration to import
+  # Keycloak Database (PostgreSQL):
+  op_db:
+    image: postgres:${KEYCLOAK_POSTGRES_VERSION:-18-alpine}
+    profiles:
+      - prod
+      - test
+      - dev
+    restart: unless-stopped
+    networks:
+      # Network to OpenID Provider:
+      op_db:
+        ipv4_address: ${NETWORK_OP_DB_DB:-172.20.0.19}
+    environment:
+      POSTGRES_DB: keycloak # Database name
+      POSTGRES_USER_FILE: /run/secrets/op_db_username # Database username secret file
+      POSTGRES_PASSWORD_FILE: /run/secrets/op_db_password # Database password secret file
+    secrets:
+      - op_db_username # Database username
+      - op_db_password # Database password
+    volumes:
+      - op_db:/var/lib/postgresql/data # Mount PostgreSQL data to shared Docker Volume 'userdb'
 
-  # # Authentik Database (PostgreSQL)
-  # db2:
-  #   image: postgres:18-alpine                                     # Use PostgreSQL on Alpine Linux as database for Authentik
-  #   restart: unless-stopped                                       # Restore last on/off state after restart
-  #   environment:
-  #     POSTGRES_DB: authentik                                      # Name database 'authentik'
-  #     POSTGRES_USER_FILE: /run/secrets/db2_username               # Set database username to Docker Secret 'db2_username'
-  #     POSTGRES_PASSWORD_FILE: /run/secrets/db2_password           # Set database password to Docker Secret 'db2_password'
-  #   secrets:
-  #     - db2_username                                              # Use shared Docker Secret 'db_username'
-  #     - db2_password                                              # Use shared Docker Secret 'db_password'
-  #   volumes:
-  #     - userdb2:/var/lib/postgresql/data                          # Mount PostgreSQL data to shared Docker Volume 'userdb'
-  # # Authentik key value storage (Redis)
-  # redis2:
-  #   image: redis:8-alpine
-  #   restart: unless-stopped
-  #   command: "--save 60 1 --loglevel warning"
-  #   volumes:
-  #     - redis2:/data
-  # op2:
-  #   image: ghcr.io/goauthentik/server:2026.2.1
-  #   restart: unless-stopped
-  #   depends_on:
-  #     - proxy
-  #     - db2
-  #     - redis2
-  #     - op2_worker
-  #   command: "server"
-  #   environment:
-  #     AUTHENTIK_REDIS__HOST: redis2
-  #     AUTHENTIK_POSTGRESQL__HOST: db2
-  #     AUTHENTIK_POSTGRESQL__NAME: authentik
-  #     AUTHENTIK_POSTGRESQL__USER: file:///run/secrets/db2_username
-  #     AUTHENTIK_POSTGRESQL__PASSWORD: file:///run/secrets/db2_password
-  #     AUTHENTIK_SECRET_KEY: file:///run/secrets/op2_secret_key
-  #     AUTHENTIK_ERROR_REPORTING__ENABLED: true
-  #     AUTHENTIK_HOST: http://op2.localhost
-  #     AUTHENTIK_INSECURE: true
-  #     # AUTHENTIK_TOKEN: token-generated-by-authentik
-  #   labels:
-  #     - traefik.enable=true
-  #     - traefik.port=9000
-  #     - traefik.http.routers.op2.entrypoints=web                   # Enable exposure via HTTP entrypoint 'web' and 'websecure'
-  #     - traefik.http.routers.op2.rule=Host(`${OP2_HOST}`)          # Specify routing via hostname provided in environment variable 'OP_HOST'
-  #     - traefik.http.routers.op2.priority=1                        # Set priority low (traefik.http.routers.ict.priority must be higher)
-  #     - traefik.http.routers.op2.middlewares=op2
-  #     - traefik.http.routers.op2.service=op2
-  #     - traefik.http.services.op2.loadbalancer.server.port=9000
-  #     - traefik.http.middlewares.op2.headers.customResponseHeaders.Access-Control-Allow-Origin=http://localhost:4200
-  #   secrets:
-  #     - db2_username                                              # Use shared Docker Secret 'db_username'
-  #     - db2_password                                              # Use shared Docker Secret 'db_password'
-  #     - op2_secret_key
-  #   volumes:
-  #     - op2_media:/media
-  #     - op2_templates:/templates
-  # op2_worker:
-  #   image: ghcr.io/goauthentik/server:2026.2.1
-  #   restart: unless-stopped
-  #   depends_on:
-  #     - proxy
-  #     - db2
-  #     - redis2
-  #   command: worker
-  #   environment:
-  #     AUTHENTIK_REDIS__HOST: redis2
-  #     AUTHENTIK_POSTGRESQL__HOST: db2
-  #     AUTHENTIK_POSTGRESQL__NAME: authentik
-  #     AUTHENTIK_POSTGRESQL__USER: file:///run/secrets/db2_username
-  #     AUTHENTIK_POSTGRESQL__PASSWORD: file:///run/secrets/db2_password
-  #     AUTHENTIK_SECRET_KEY: file:///run/secrets/op2_secret_key
-  #     AUTHENTIK_ERROR_REPORTING__ENABLED: true
-  #   secrets:
-  #     - db2_username                                              # Use shared Docker Secret 'db_username'
-  #     - db2_password                                              # Use shared Docker Secret 'db_password'
-  #     - op2_secret_key
-  #   volumes:
-  #     - /var/run/docker.sock:/var/run/docker.sock
-  #     - ./.secrets/certs:/certs
-  #     - op2_media:/media
-  #     - op2_templates:/templates
-  # # ICT endpoint for WSO2 (this Go application):
-  # ict2:
-  #   # # For testing:
-  #   # image: jonasprimbs/oidc-e2ea-server:latest                    # Use latest image from Docker Hub
-  #   # For development:
-  #   build:
-  #     context: ./                                                 # Use this repository directory as context
-  #     dockerfile: Dockerfile                                      # Use 'Dockerfile' from context directory
-  #   # For both:
-  #   restart: unless-stopped                                       # Restore last on/off state after restart
-  #   depends_on:
-  #     - proxy                                                     # ICT endpoint requires running reverse proxy
-  #     - op2                                                       # ICT endpoint requires running Op4enID Provider
-  #   labels:
-  #     - traefik.enable=true                                       # Enable Traefik reverse proxy exposure
-  #     - traefik.http.routers.ict2.entrypoints=web                 # Enable exposure via HTTP entrypoint 'web'
-  #     - >-                                                        # Specify routing via hostname provided in environment variable 'OP_HOST' and append it to userinfo endpoint
-  #       traefik.http.routers.ict2.rule=(Host(`${OP2_HOST}`) &&
-  #       PathPrefix(`/application/o/userinfo/ict`))
-  #     - traefik.http.routers.ict2.priority=2                      # Set priority high (traefik.http.routers.op.priority must be lower)
-  #     - traefik.http.routers.ict2.middlewares=ict2@docker         # Include 'ict' middleware from Docker labels below 
-  #     - >-                                                        # Remove .../userinfo/ict path from request
-  #       traefik.http.middlewares.ict2.replacepathregex.regex=^/application/o/userinfo/ict(.*)
-  #     - >-                                                        # Forward only path after .../userinfo/ict (marked with '(.*)') in request to ICT endpoint
-  #       traefik.http.middlewares.ict2.replacepathregex.replacement=$$1
-  #   environment:
-  #     KEY_FILE: /run/secrets/op2_private_key                      # Set private key file to Docker Secret 'op_private_key'
-  #     ALG: RS256                                                  # Configure RSA with SHA256 (RS256) as signature algorithm for ID Assertion Tokens
-  #     USERINFO: http://op2:9000/application/o/userinfo/            # Configure userinfo endpoint ('op' is the Docker-internal hostname of OpenID Provider service)
-  #     TOKEN_INTROSPECTION: http://op2:9000/application/o/introspect/
-  #     TOKEN_INTROSPECTION_HOST: op2:9000
-  #     INTROSPECTION_CREDENTIALS: ${ICT_CREDENTIALS2}               # HTTP Basic Authentication Client Credentials of ICT Endpoint
-  #     CONTEXT_PREFIX: e2e_auth_
-  #     ISSUER: http://${OP2_HOST}/application/o/ict-benchmark/       # Configure issuer of issued ID Assertion Tokens
-  #     DEFAULT_TOKEN_PERIOD: 3600                                  # Configure the default lifetime of issued ID Assertion Tokens in seconds (3600s = 1h)
-  #     MAX_TOKEN_PERIOD: 2592000                                   # Configure the maximum lifetime of issued ID Assertion Tokens in seconds (2592000s = 30d)
-  #     PORT: 8080                                                  # Configure the internal port on which the ICT endpoint is listening
-  #   env_file:
-  #     - ./.secrets/ict2.env                                       # Include secrets from generated environment variables
-  #   secrets:
-  #     - op2_private_key                                           # Use shared Docker Secret 'op_private_key'
-
-# Shared Docker Volumes:
-volumes:
-  userdb:                                                         # Specify shared volume 'userdb'
-  userdb2:
-  redis2:
-  op2_media:
-  op2_templates:
-
-# Shared Docker Secrets:
-secrets:
-  db_username:                                                    # Specify shared Docker Secret 'db_username'
-    file: ./.secrets/db_username.txt                              # Use generated database username
-  db_password:                                                    # Specify shared Docker Secret 'db_password'
-    file: ./.secrets/db_password.txt                              # Use generated database password
-  op_private_key:                                                 # Specify shared Docker Secret 'op_private_key'
-    file: ./.secrets/private.pem                                  # Use generated private key
-  # db2_username:                                                   # Specify shared Docker Secret 'db_username'
-  #   file: ./.secrets/db2_username.txt                             # Use generated database username
-  # db2_password:                                                   # Specify shared Docker Secret 'db_password'
-  #   file: ./.secrets/db2_password.txt                             # Use generated database password
-  # op2_secret_key:
-  #   file: ./.secrets/op2_secret_key.txt
-  # op2_private_key:
-  #   file: ./.secrets/private2.pem
+  # OIDC² Middleware (this application):
+  oidc2middleware-prod:
+    image: jonasprimbs/oidc-e2ea-server:${OIDC2MIDDLEWARE_VERSION:-0.2}
+    profiles:
+      - prod
+    restart: unless-stopped
+    depends_on:
+      - proxy-prod
+      - op-prod
+    networks:
+      # Network to reverse proxy:
+      proxy_oidc2middleware:
+        ipv4_address: ${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.27}
+    extra_hosts:
+      - "${OP_HOST:-op.example.com}=${NETWORK_PROXY_OIDC2MIDDLEWARE_PROXY:-172.20.0.26}" # Send OP traffic to reverse proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.oidc2middleware.entrypoints=websecure
+      - traefik.http.routers.oidc2middleware.priority=2
+      - traefik.http.routers.oidc2middleware.rule=Host(`${OP_HOST:-op.localhost}`) && Path(`/realms/ict/protocol/openid-connect/token`)
+      - traefik.http.routers.oidc2middleware.middlewares=oidc2middleware_pathstrip,oidc2middleware_cors
+      - traefik.http.middlewares.oidc2middleware_pathstrip.stripprefix.prefixes=/realms/ict/protocol/openid-connect/token
+      - traefik.http.middlewares.oidc2middleware_cors.headers.customResponseHeaders.Access-Control-Allow-Origin=${CORS_ALLOWED_ORIGINS:-https://editor.swagger.io}
+      - traefik.http.routers.oidc2middleware.service=oidc2middleware
+      - traefik.http.services.oidc2middleware.loadbalancer.server.url=http://${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.27}:8080
+    environment:
+      KEY_FILE: /run/secrets/op_private_key # Private ICT signing key
+      KEY_ID: ${KEY_ID} # Key ID of the ICT signing key
+      ISSUER: https://${OP_HOST:-op.example.com}/realms/ict # Issuer of the ICT
+      ALG: ${ALG:-RS256} # ICT signing algorithm
+      TOKEN_PERIOD: ${TOKEN_PERIOD:-3600} # Lifetime of the ICT
+      PORT: 8080
+    secrets:
+      - op_private_key # Private ICT signing key file
+  oidc2middleware-test:
+    image: jonasprimbs/oidc-e2ea-server:${OIDC2MIDDLEWARE_VERSION:-0.2}
+    profiles:
+      - test
+    restart: unless-stopped
+    depends_on:
+      - proxy-test
+      - op-test
+    networks:
+      # Network to reverse proxy:
+      proxy_oidc2middleware:
+        ipv4_address: ${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.27}
+    extra_hosts:
+      - "${OP_HOST:-op.localhost}=${NETWORK_PROXY_OIDC2MIDDLEWARE_PROXY:-172.20.0.26}" # Send OP traffic to reverse proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.oidc2middleware.entrypoints=websecure
+      - traefik.http.routers.oidc2middleware.priority=2
+      - traefik.http.routers.oidc2middleware.rule=Host(`${OP_HOST:-op.localhost}`) && Path(`/realms/ict/protocol/openid-connect/token`)
+      - traefik.http.routers.oidc2middleware.middlewares=oidc2middleware_pathstrip,oidc2middleware_cors
+      - traefik.http.middlewares.oidc2middleware_pathstrip.stripprefix.prefixes=/realms/ict/protocol/openid-connect/token
+      - traefik.http.middlewares.oidc2middleware_cors.headers.customResponseHeaders.Access-Control-Allow-Origin=${CORS_ALLOWED_ORIGINS:-https://editor.swagger.io}
+      - traefik.http.routers.oidc2middleware.service=oidc2middleware
+      - traefik.http.services.oidc2middleware.loadbalancer.server.url=http://${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.27}:8080
+    environment:
+      KEY_FILE: /run/secrets/op_private_key # Private ICT signing key
+      KEY_ID: ${KEY_ID} # Key ID of the ICT signing key
+      ISSUER: https://${OP_HOST:-op.localhost}/realms/ict # Issuer of the ICT
+      ALG: ${ALG:-RS256} # ICT signing algorithm
+      TOKEN_PERIOD: ${TOKEN_PERIOD:-3600} # Lifetime of the ICT
+      PORT: 8080
+    secrets:
+      - op_private_key # Private ICT signing key file
+  oidc2middleware-dev:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    profiles:
+      - dev
+    restart: unless-stopped
+    depends_on:
+      - proxy-test
+      - op-test
+    networks:
+      # Network to reverse proxy:
+      proxy_oidc2middleware:
+        ipv4_address: ${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.27}
+    extra_hosts:
+      - "${OP_HOST:-op.localhost}=${NETWORK_PROXY_OIDC2MIDDLEWARE_PROXY:-172.20.0.26}" # Send OP traffic to reverse proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.oidc2middleware.entrypoints=websecure
+      - traefik.http.routers.oidc2middleware.priority=2
+      - traefik.http.routers.oidc2middleware.rule=Host(`${OP_HOST:-op.localhost}`) && Path(`/realms/ict/protocol/openid-connect/token`)
+      - traefik.http.routers.oidc2middleware.middlewares=oidc2middleware_pathstrip,oidc2middleware_cors
+      - traefik.http.middlewares.oidc2middleware_pathstrip.stripprefix.prefixes=/realms/ict/protocol/openid-connect/token
+      - traefik.http.middlewares.oidc2middleware_cors.headers.customResponseHeaders.Access-Control-Allow-Origin=${CORS_ALLOWED_ORIGINS:-https://editor.swagger.io}
+      - traefik.http.routers.oidc2middleware.service=oidc2middleware
+      - traefik.http.services.oidc2middleware.loadbalancer.server.url=http://${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.27}:8080
+    environment:
+      KEY_FILE: /run/secrets/op_private_key # Private ICT signing key
+      KEY_ID: ${KEY_ID} # Key ID of the ICT signing key
+      ISSUER: https://${OP_HOST:-op.localhost}/realms/ict # Issuer of the ICT
+      ALG: ${ALG:-RS256} # ICT signing algorithm
+      TOKEN_PERIOD: ${TOKEN_PERIOD:-3600} # Lifetime of the ICT
+      PORT: 8080
+    secrets:
+      - op_private_key # Private ICT signing key file
 
 networks:
-  proxy:
+  # Network between internal certificate authority and reverse proxy for ACME TLS-ALPN-01 challenge:
+  ca_proxy:
     driver: bridge
-    name: oidc2_proxy
+    internal: true # No internet access
+    ipam:
+      config:
+        - subnet: ${NETWORK_CA_PROXY_CIDR:-172.20.0.0/29}
+          gateway: ${NETWORK_CA_PROXY_GATEWAY:-172.20.0.1}
+  # Network between reverse proxy and OpenID Provider:
+  proxy_op:
+    driver: bridge
+    internal: true # No internet access
+    ipam:
+      config:
+        - subnet: ${NETWORK_PROXY_OP_CIDR:-172.20.0.8/29}
+          gateway: ${NETWORK_PROXY_OP_GATEWAY:-172.20.0.9}
+  # Network between OpenID Provider and its database:
+  op_db:
+    driver: bridge
+    internal: true # No internet access
+    ipam:
+      config:
+        - subnet: ${NETWORK_OP_DB_CIDR:-172.20.0.16/29}
+          gateway: ${NETWORK_OP_DB_GATEWAY:-172.20.0.17}
+  # Network between reverse proxy and OIDC² middleware:
+  proxy_oidc2middleware:
+    driver: bridge
+    internal: true # No internet access
+    ipam:
+      config:
+        - subnet: ${NETWORK_PROXY_OIDC2MIDDLEWARE_CIDR:-172.20.0.24/29}
+          gateway: ${NETWORK_PROXY_OIDC2MIDDLEWARE_GATEWAY:-172.20.0.25}
+
+secrets:
+  # Internal certificate's secrets:
+  ca_password: # Internal certificate's authority private key password
+    file: ./.secrets/ca_password.txt
+  root_ca.crt: # Internal certificate's root CA certificate
+    file: ./.secrets/root_ca.crt
+  root_ca_key: # Internal certificate's root CA private key
+    file: ./.secrets/root_ca_key.pem
+  root_ca_key_password: # Internal certificate's root CA private key password
+    file: ./.secrets/root_ca_key_password.txt
+
+  # OpenID Provider's database secrets:
+  op_db_username: # OpenID Provider database username
+    file: ./.secrets/db_username.txt
+  op_db_password: # OpenID Provider database password
+    file: ./.secrets/db_password.txt
+
+  # OpenID Provider's ICT secrets:
+  op_private_key: # OpenID Provider ICT signing private key file
+    file: ./.secrets/private.pem
+
+volumes:
+  op_db: # OpenID Provider's persistent database
