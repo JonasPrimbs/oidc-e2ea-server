@@ -6,27 +6,59 @@ services:
       - test
       - dev
     restart: unless-stopped
+    depends_on:
+      - ca_db
     networks:
       # Network to reverse proxy for ACME TLS-ALPN-01 challenge:
       ca_proxy:
-        ipv4_address: ${NETWORK_CA_PROXY_CA:-172.20.0.2}
+        ipv4_address: ${NETWORK_CA_PROXY_CA:-172.20.0.26}
+      # Network to CA database:
+      ca_db:
+        ipv4_address: ${NETWORK_CA_DB_CA:-172.20.0.34}
     extra_hosts:
-      - "${OP_HOST:-op.localhost}=${NETWORK_CA_PROXY_PROXY:-172.20.0.3}" # Map OP_HOST to host gateway for ACME TLS-ALPN-01 challenge
+      - "${OP_HOST:-op.localhost}=${NETWORK_CA_PROXY_PROXY:-172.20.0.27}" # Map $OP_HOST to host gateway for ACME TLS-ALPN-01 challenge
+      - "ca_db=${NETWORK_CA_DB_DB:-172.20.0.35}" # The database's hostname
     environment:
-      DOCKER_STEPCA_INIT_NAME: ${CA_NAME:-ca.localhost} # The CA's hostname
-      DOCKER_STEPCA_INIT_DNS_NAMES: ${OP_HOST:-op.localhost} # List of hostnames to issue certificates for
-      DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT: false # Disable remote management API for security hardening
-      DOCKER_STEPCA_INIT_ACME: true # Enable ACME support
-      DOCKER_STEPCA_INIT_PASSWORD_FILE: /run/secrets/ca_password # Password secret file to encrypt private keys with
+      # Database configuration:
+      PGSSLMODE: disable
+      PGHOST: ca_db
+      PGPORT: 5432
+      PGDATABASE: stepca
+      PGUSER: stepca
+      PGPASSFILE: /run/secrets/ca_db_passfile
+    command: >
+      step-ca /home/step/config/ca.json
+      --password-file=/run/secrets/ca_intermediate_key_password
     secrets:
-      - ca_password # CA private keys secret password
-      - root_ca.crt # The intermediate CA certificate file
-      - root_ca_key # The intermediate CA private key file
-      - root_ca_key_password # The intermediate CA private key password file
+      - ca_intermediate_key_password # Intermediate CA private key password
+      - ca_intermediate_key # Intermediate CA private key file
+      - ca_intermediate_cert # Intermediate CA certificate file
+      - ca_root_cert # Root CA certificate file
+      - ca_db_passfile # Database password file
     volumes:
       - ./ca/authorities/:/home/step/authorities/:ro # The policy and settings files
       - ./.secrets/ca/db/:/home/step/db/:rw # The CA database for issued certificates
-      - ./ca/config/:/home/step/config/:ro # The common configuration files and defaults
+      - ./ca/config/ca.json:/home/step/config/ca.json:ro # The common configuration files and defaults
+  # Internal Certificate Authority's database (PostgreSQL):
+  ca_db:
+    image: postgres:${KEYCLOAK_POSTGRES_VERSION:-18-alpine}
+    profiles:
+      - prod
+      - test
+      - dev
+    restart: unless-stopped
+    networks:
+      # Network to Certificate Authority:
+      ca_db:
+        ipv4_address: ${NETWORK_CA_DB_DB:-172.20.0.35}
+    environment:
+      POSTGRES_DB: stepca # Database name
+      POSTGRES_USER: stepca # Database username
+      POSTGRES_PASSWORD_FILE: /run/secrets/ca_db_password # Database password secret file
+    secrets:
+      - ca_db_password # Database password
+    volumes:
+      - ca_db:/var/lib/postgresql # Mount PostgreSQL data to shared Docker Volume 'userdb'
 
   # Reverse Proxy (Traefik):
   proxy-prod:
@@ -41,15 +73,15 @@ services:
     networks:
       # Network to OpenID Provider:
       proxy_op:
-        ipv4_address: ${NETWORK_PROXY_OP_PROXY:-172.20.0.10}
+        ipv4_address: ${NETWORK_PROXY_OP_PROXY:-172.20.0.2}
       # Network to OIDC² middleware:
       proxy_oidc2middleware:
-        ipv4_address: ${NETWORK_PROXY_OIDC2MIDDLEWARE_PROXY:-172.20.0.26}
+        ipv4_address: ${NETWORK_PROXY_OIDC2MIDDLEWARE_PROXY:-172.20.0.18}
     command:
       - "--accesslog=true"
-      - "--log.level=INFO"
+      - "--log.level=ERROR"
       - "--entrypoints.web.address=:80/tcp" # HTTP entrypoint
-      - "--entrypoints.web.redirections.entrypoint.to=websecure" # Permanently redirect HTTP to HTTPS
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure" # Permanently redirect HTTP to HTTPS
       - "--entrypoints.websecure.address=:443" # HTTPS entrypoint
       - "--entrypoints.websecure.http3=true" # Enable HTTP/3 on HTTPS entrypoint
       - "--entrypoints.websecure.http3.advertisedport=443" # Advertise port 443/udp for HTTP/3
@@ -58,14 +90,14 @@ services:
       - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true" # Use TLS-ALPN-01 challenge for certificate resolution
       - "--certificatesresolvers.letsencrypt.acme.profile=shortlived" # Use Let's Encrypt short lived certificate profile (160h lifetime)
       - "--certificatesresolvers.letsencrypt.acme.storage=/certs/acme.json" # Store Let's Encrypt certificates in mounted volume
-      - "--certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL:-admin@example.com}" # Email for Let's Encrypt registration
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}" # Email for Let's Encrypt registration
       - "--providers.docker=true" # Enable Docker provider
       - "--providers.docker.endpoint=unix:///var/run/docker.sock" # Path to docker socket to listen to new services
       - "--providers.docker.exposedbydefault=false" # Do not expose every service by default
       - "--providers.docker.network=proxy" # User 'proxy' network as default network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro # Mount host's docker socket for service discovery
-      - ./.secrets/certs:/certs:rw # Mount local directory for Let's Encrypt certificate storage
+      - ./.secrets/certs/:/certs/:rw # Mount local directory for Let's Encrypt certificate storage
   proxy-test:
     image: traefik:${TRAEFIK_VERSION:-v3.6}
     profiles:
@@ -81,33 +113,40 @@ services:
     networks:
       # Network to reverse proxy for ACME TLS-ALPN-01 challenge:
       ca_proxy:
-        ipv4_address: ${NETWORK_CA_PROXY_PROXY:-172.20.0.3}
+        ipv4_address: ${NETWORK_CA_PROXY_PROXY:-172.20.0.27}
       # Network to OpenID Provider:
       proxy_op:
-        ipv4_address: ${NETWORK_PROXY_OP_PROXY:-172.20.0.10}
+        ipv4_address: ${NETWORK_PROXY_OP_PROXY:-172.20.0.2}
       # Network to OIDC² middleware:
       proxy_oidc2middleware:
-        ipv4_address: ${NETWORK_PROXY_OIDC2MIDDLEWARE_PROXY:-172.20.0.26}
+        ipv4_address: ${NETWORK_PROXY_OIDC2MIDDLEWARE_PROXY:-172.20.0.18}
+    extra_hosts:
+      - "${CA_HOST:-ca.localhost}=${NETWORK_CA_PROXY_CA:-172.20.0.26}"
     command:
       - "--accesslog=true"
-      - "--log.level=DEBUG"
+      - "--log.level=INFO"
       - "--entrypoints.web.address=:80/tcp" # HTTP entrypoint
-      - "--entrypoints.web.redirections.entrypoint.to=websecure" # Permanently redirect HTTP to HTTPS
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure" # Permanently redirect HTTP to HTTPS
       - "--entrypoints.websecure.address=:443" # HTTPS entrypoint
       - "--entrypoints.websecure.http3=true" # Enable HTTP/3 on HTTPS entrypoint
       - "--entrypoints.websecure.http3.advertisedport=443" # Advertise port 443/udp for HTTP/3
       - "--entrypoints.websecure.http.tls=true" # Enable TLS on HTTPS entrypoint
       - "--entrypoints.websecure.http.tls.certresolver=stepca" # Use Let's Encrypt for TLS certificate resolution
       - "--certificatesresolvers.stepca.acme.tlschallenge=true" # Use TLS-ALPN-01 challenge for certificate resolution
-      - "--certificatesresolvers.stepca.acme.profile=shortlived" # Use Let's Encrypt short lived certificate profile (160h lifetime)
-      - "--certificatesresolvers.stepca.acme.storage=/certs/acme.json" # Store Let's Encrypt certificates in mounted volume
-      - "--certificatesresolvers.stepca.acme.email=${LETSENCRYPT_EMAIL:-admin@example.com}" # Email for Let's Encrypt registration
+      - "--certificatesresolvers.stepca.acme.caServer=https://${CA_HOST:-ca.localhost}/acme/internal/directory" # Use internal CA for ACME certificate resolution
+      - "--certificatesresolvers.stepca.acme.caCertificates=/run/secrets/ca_root_cert" # Root certificate of the internal CA to validate ACME challenges
+      - "--certificatesresolvers.stepca.acme.caServerName=${CA_HOST:-ca.localhost}" # The internal CA's expected hostname
+      - "--certificatesresolvers.stepca.acme.storage=/certs/acme.json" # Store Step-CA certificates in mounted volume
+      - "--certificatesresolvers.stepca.acme.email=${ACME_EMAIL:-admin@example.com}" # Email for Let's Encrypt registration
       - "--providers.docker=true" # Enable Docker provider
       - "--providers.docker.endpoint=unix:///var/run/docker.sock" # Path to docker socket to listen to new services
       - "--providers.docker.exposedbydefault=false" # Do not expose every service by default
       - "--providers.docker.network=proxy" # User 'proxy' network as default network
+    secrets:
+      - ca_root_cert # Root certificate of the internal CA to validate ACME challenges
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro # Mount host's docker socket for service discovery
+      - ./.secrets/certs/:/certs/:rw # Mount local directory for Let's Encrypt certificate storage
 
   # OpenID Provider (Keycloak):
   op-prod:
@@ -121,33 +160,33 @@ services:
     networks:
       # Network to reverse proxy:
       proxy_op:
-        ipv4_address: ${NETWORK_PROXY_OP_OP:-172.20.0.11}
+        ipv4_address: ${NETWORK_PROXY_OP_OP:-172.20.0.3}
       # Network to database:
       op_db:
-        ipv4_address: ${NETWORK_OP_DB_OP:-172.20.0.18}
+        ipv4_address: ${NETWORK_OP_DB_OP:-172.20.0.10}
     labels:
       - traefik.enable=true
       - traefik.http.routers.op.entrypoints=websecure
       - traefik.http.routers.op.rule=Host(`${OP_HOST:-op.example.com}`)
       - traefik.http.routers.op.priority=1
       - traefik.http.routers.op.service=op
-      - traefik.http.services.op.loadbalancer.server.url=http://${NETWORK_PROXY_OP_OP:-172.20.0.11}:8080
+      - traefik.http.services.op.loadbalancer.server.url=http://${NETWORK_PROXY_OP_OP:-172.20.0.3}:8080
     environment:
+      # Database configuration:
       KC_DB: postgres # Use a PostgreSQL database
-      KC_DB_URL: jdbc:postgresql://${NETWORK_OP_DB_DB:-172.20.0.19}:5432/keycloak # PostgreSQL database connection string
-      KC_DB_USERNAME_FILE: /run/secrets/op_db_username # Database username secret file
-      KC_DB_PASSWORD_FILE: /run/secrets/op_db_password # Database password secret file
+      KC_DB_URL: jdbc:postgresql://${NETWORK_OP_DB_DB:-172.20.0.11}:5432/keycloak # PostgreSQL database connection string
+      KC_DB_USERNAME: keycloak # Database username
+      # Hosting configuration:
       KC_HOSTNAME: ${OP_HOST:-op.example.com} # Proxied hostname
       KC_PROXY_HEADERS: xforwarded # Expect X-Forwarded-* headers from reverse proxy
+      # Admin configuration:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
     env_file:
       - ./.secrets/op.env # Load admin's initial username and password from generated environment file
     command:
       - "start" # Start in production mode
       - "--optimized" # Load optimized defaults
       - "--import-realm" # Import realm configuration
-    secrets:
-      - op_db_username
-      - op_db_password
     volumes:
       - ./keycloak/realms/:/opt/keycloak/data/import/:ro # Default realm configuration to import
   op-test:
@@ -162,32 +201,32 @@ services:
     networks:
       # Network to reverse proxy:
       proxy_op:
-        ipv4_address: ${NETWORK_PROXY_OP_OP:-172.20.0.11}
+        ipv4_address: ${NETWORK_PROXY_OP_OP:-172.20.0.3}
       # Network to database:
       op_db:
-        ipv4_address: ${NETWORK_OP_DB_OP:-172.20.0.18}
+        ipv4_address: ${NETWORK_OP_DB_OP:-172.20.0.10}
     labels:
       - traefik.enable=true
       - traefik.http.routers.op.entrypoints=websecure
       - traefik.http.routers.op.rule=Host(`${OP_HOST:-op.localhost}`)
       - traefik.http.routers.op.priority=1
       - traefik.http.routers.op.service=op
-      - traefik.http.services.op.loadbalancer.server.url=http://${NETWORK_PROXY_OP_OP:-172.20.0.11}:8080
+      - traefik.http.services.op.loadbalancer.server.url=http://${NETWORK_PROXY_OP_OP:-172.20.0.3}:8080
     environment:
+      # Database configuration:
       KC_DB: postgres # Use a PostgreSQL database
-      KC_DB_URL: jdbc:postgresql://${NETWORK_OP_DB_DB:-172.20.0.19}:5432/keycloak # PostgreSQL database connection string
-      KC_DB_USERNAME_FILE: /run/secrets/op_db_username # Database username secret file
-      KC_DB_PASSWORD_FILE: /run/secrets/op_db_password # Database password secret file
+      KC_DB_URL: jdbc:postgresql://${NETWORK_OP_DB_DB:-172.20.0.11}:5432/keycloak # PostgreSQL database connection string
+      KC_DB_USERNAME: keycloak # Database username
+      # Hosting configuration:
       KC_HOSTNAME: ${OP_HOST:-op.localhost} # Proxied hostname
       KC_PROXY_HEADERS: xforwarded # Expect X-Forwarded-* headers from reverse proxy
+      # Admin configuration:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
     env_file:
       - ./.secrets/op.env # Load admin's initial username and password from generated environment file
     command:
       - "start-dev" # Start in development mode
       - "--import-realm" # Import realm configuration
-    secrets:
-      - op_db_username
-      - op_db_password
     volumes:
       - ./keycloak/realms/:/opt/keycloak/data/import/:ro # Default realm configuration to import
   # Keycloak Database (PostgreSQL):
@@ -201,16 +240,15 @@ services:
     networks:
       # Network to OpenID Provider:
       op_db:
-        ipv4_address: ${NETWORK_OP_DB_DB:-172.20.0.19}
+        ipv4_address: ${NETWORK_OP_DB_DB:-172.20.0.11}
     environment:
       POSTGRES_DB: keycloak # Database name
-      POSTGRES_USER_FILE: /run/secrets/op_db_username # Database username secret file
+      POSTGRES_USER: keycloak # Database username
       POSTGRES_PASSWORD_FILE: /run/secrets/op_db_password # Database password secret file
     secrets:
-      - op_db_username # Database username
       - op_db_password # Database password
     volumes:
-      - op_db:/var/lib/postgresql/data # Mount PostgreSQL data to shared Docker Volume 'userdb'
+      - op_db:/var/lib/postgresql # Mount PostgreSQL data to shared Docker Volume 'userdb'
 
   # OIDC² Middleware (this application):
   oidc2middleware-prod:
@@ -224,9 +262,9 @@ services:
     networks:
       # Network to reverse proxy:
       proxy_oidc2middleware:
-        ipv4_address: ${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.27}
+        ipv4_address: ${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.19}
     extra_hosts:
-      - "${OP_HOST:-op.example.com}=${NETWORK_PROXY_OIDC2MIDDLEWARE_PROXY:-172.20.0.26}" # Send OP traffic to reverse proxy
+      - "${OP_HOST:-op.example.com}=${NETWORK_PROXY_OIDC2MIDDLEWARE_PROXY:-172.20.0.18}" # Send OP traffic to reverse proxy
     labels:
       - traefik.enable=true
       - traefik.http.routers.oidc2middleware.entrypoints=websecure
@@ -236,7 +274,7 @@ services:
       - traefik.http.middlewares.oidc2middleware_pathstrip.stripprefix.prefixes=/realms/ict/protocol/openid-connect/token
       - traefik.http.middlewares.oidc2middleware_cors.headers.customResponseHeaders.Access-Control-Allow-Origin=${CORS_ALLOWED_ORIGINS:-https://editor.swagger.io}
       - traefik.http.routers.oidc2middleware.service=oidc2middleware
-      - traefik.http.services.oidc2middleware.loadbalancer.server.url=http://${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.27}:8080
+      - traefik.http.services.oidc2middleware.loadbalancer.server.url=http://${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.19}:8080
     environment:
       KEY_FILE: /run/secrets/op_private_key # Private ICT signing key
       KEY_ID: ${KEY_ID} # Key ID of the ICT signing key
@@ -257,9 +295,9 @@ services:
     networks:
       # Network to reverse proxy:
       proxy_oidc2middleware:
-        ipv4_address: ${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.27}
+        ipv4_address: ${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.19}
     extra_hosts:
-      - "${OP_HOST:-op.localhost}=${NETWORK_PROXY_OIDC2MIDDLEWARE_PROXY:-172.20.0.26}" # Send OP traffic to reverse proxy
+      - "${OP_HOST:-op.localhost}=${NETWORK_PROXY_OIDC2MIDDLEWARE_PROXY:-172.20.0.18}" # Send OP traffic to reverse proxy
     labels:
       - traefik.enable=true
       - traefik.http.routers.oidc2middleware.entrypoints=websecure
@@ -269,7 +307,7 @@ services:
       - traefik.http.middlewares.oidc2middleware_pathstrip.stripprefix.prefixes=/realms/ict/protocol/openid-connect/token
       - traefik.http.middlewares.oidc2middleware_cors.headers.customResponseHeaders.Access-Control-Allow-Origin=${CORS_ALLOWED_ORIGINS:-https://editor.swagger.io}
       - traefik.http.routers.oidc2middleware.service=oidc2middleware
-      - traefik.http.services.oidc2middleware.loadbalancer.server.url=http://${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.27}:8080
+      - traefik.http.services.oidc2middleware.loadbalancer.server.url=http://${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.19}:8080
     environment:
       KEY_FILE: /run/secrets/op_private_key # Private ICT signing key
       KEY_ID: ${KEY_ID} # Key ID of the ICT signing key
@@ -292,9 +330,9 @@ services:
     networks:
       # Network to reverse proxy:
       proxy_oidc2middleware:
-        ipv4_address: ${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.27}
+        ipv4_address: ${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.19}
     extra_hosts:
-      - "${OP_HOST:-op.localhost}=${NETWORK_PROXY_OIDC2MIDDLEWARE_PROXY:-172.20.0.26}" # Send OP traffic to reverse proxy
+      - "${OP_HOST:-op.localhost}=${NETWORK_PROXY_OIDC2MIDDLEWARE_PROXY:-172.20.0.18}" # Send OP traffic to reverse proxy
     labels:
       - traefik.enable=true
       - traefik.http.routers.oidc2middleware.entrypoints=websecure
@@ -304,7 +342,7 @@ services:
       - traefik.http.middlewares.oidc2middleware_pathstrip.stripprefix.prefixes=/realms/ict/protocol/openid-connect/token
       - traefik.http.middlewares.oidc2middleware_cors.headers.customResponseHeaders.Access-Control-Allow-Origin=${CORS_ALLOWED_ORIGINS:-https://editor.swagger.io}
       - traefik.http.routers.oidc2middleware.service=oidc2middleware
-      - traefik.http.services.oidc2middleware.loadbalancer.server.url=http://${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.27}:8080
+      - traefik.http.services.oidc2middleware.loadbalancer.server.url=http://${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.19}:8080
     environment:
       KEY_FILE: /run/secrets/op_private_key # Private ICT signing key
       KEY_ID: ${KEY_ID} # Key ID of the ICT signing key
@@ -316,59 +354,71 @@ services:
       - op_private_key # Private ICT signing key file
 
 networks:
-  # Network between internal certificate authority and reverse proxy for ACME TLS-ALPN-01 challenge:
-  ca_proxy:
-    driver: bridge
-    internal: true # No internet access
-    ipam:
-      config:
-        - subnet: ${NETWORK_CA_PROXY_CIDR:-172.20.0.0/29}
-          gateway: ${NETWORK_CA_PROXY_GATEWAY:-172.20.0.1}
   # Network between reverse proxy and OpenID Provider:
   proxy_op:
     driver: bridge
     internal: true # No internet access
     ipam:
       config:
-        - subnet: ${NETWORK_PROXY_OP_CIDR:-172.20.0.8/29}
-          gateway: ${NETWORK_PROXY_OP_GATEWAY:-172.20.0.9}
+        - subnet: ${NETWORK_PROXY_OP_CIDR:-172.20.0.0/29}
+          gateway: ${NETWORK_PROXY_OP_GATEWAY:-172.20.0.1}
   # Network between OpenID Provider and its database:
   op_db:
     driver: bridge
     internal: true # No internet access
     ipam:
       config:
-        - subnet: ${NETWORK_OP_DB_CIDR:-172.20.0.16/29}
-          gateway: ${NETWORK_OP_DB_GATEWAY:-172.20.0.17}
+        - subnet: ${NETWORK_OP_DB_CIDR:-172.20.0.8/29}
+          gateway: ${NETWORK_OP_DB_GATEWAY:-172.20.0.9}
   # Network between reverse proxy and OIDC² middleware:
   proxy_oidc2middleware:
     driver: bridge
     internal: true # No internet access
     ipam:
       config:
-        - subnet: ${NETWORK_PROXY_OIDC2MIDDLEWARE_CIDR:-172.20.0.24/29}
-          gateway: ${NETWORK_PROXY_OIDC2MIDDLEWARE_GATEWAY:-172.20.0.25}
+        - subnet: ${NETWORK_PROXY_OIDC2MIDDLEWARE_CIDR:-172.20.0.16/29}
+          gateway: ${NETWORK_PROXY_OIDC2MIDDLEWARE_GATEWAY:-172.20.0.17}
+  # Network between internal certificate authority and reverse proxy for ACME TLS-ALPN-01 challenge:
+  ca_proxy:
+    driver: bridge
+    internal: true # No internet access
+    ipam:
+      config:
+        - subnet: ${NETWORK_CA_PROXY_CIDR:-172.20.0.24/29}
+          gateway: ${NETWORK_CA_PROXY_GATEWAY:-172.20.0.25}
+  # Network between internal certificate authority and its database:
+  ca_db:
+    driver: bridge
+    internal: true # No internet access
+    ipam:
+      config:
+        - subnet: ${NETWORK_CA_DB_CIDR:-172.20.0.32/29}
+          gateway: ${NETWORK_CA_DB_GATEWAY:-172.20.0.33}
 
 secrets:
   # Internal certificate's secrets:
-  ca_password: # Internal certificate's authority private key password
-    file: ./.secrets/ca_password.txt
-  root_ca.crt: # Internal certificate's root CA certificate
-    file: ./.secrets/root_ca.crt
-  root_ca_key: # Internal certificate's root CA private key
-    file: ./.secrets/root_ca_key.pem
-  root_ca_key_password: # Internal certificate's root CA private key password
-    file: ./.secrets/root_ca_key_password.txt
+  ca_intermediate_key_password: # Internal intermediate CA's private key password
+    file: ./.secrets/ca_intermediate_password.txt
+  ca_intermediate_key: # Internal intermediate CA's private key
+    file: ./.secrets/ca_intermediate.key
+  ca_intermediate_cert: # Internal intermediate CA's certificate
+    file: ./.secrets/ca_intermediate.crt
+  ca_root_cert: # External root CA's certificate
+    file: ./.secrets/ca_root.crt
+  ca_db_passfile: # Internal Certificate Authority's database password file
+    file: ./.secrets/ca_db_passfile.txt
 
   # OpenID Provider's database secrets:
-  op_db_username: # OpenID Provider database username
-    file: ./.secrets/db_username.txt
   op_db_password: # OpenID Provider database password
-    file: ./.secrets/db_password.txt
-
+    file: ./.secrets/op_db_password.txt
   # OpenID Provider's ICT secrets:
   op_private_key: # OpenID Provider ICT signing private key file
-    file: ./.secrets/private.pem
+    file: ./.secrets/op_private.pem
+
+  # Certificate Autority's database secrets:
+  ca_db_password: # Certificate Authority database password
+    file: ./.secrets/ca_db_password.txt
 
 volumes:
   op_db: # OpenID Provider's persistent database
+  ca_db: # Certificate Autority's persistent database
