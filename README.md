@@ -63,16 +63,32 @@ copy example.env .env
 nano .env
 ```
 
-Then, use the following command to run the composition:
+Then, generate your secret files:
+
+```bash
+./scripts/generate-secrets.sh
+```
+
+If you run the service locally, you should import the generated root certificate from `./.secrets/ca_root.crt` to your browser and you have to configure your local certicate authority:
+```bash
+./scripts/generate-ca-config.sh
+```
+
+Then, use the following command to run the composition in the required profile:
 ```bash
 # Start the composition in detached mode (-d):
-docker compose up -d
+docker compose --profile "test" up -d
 ```
+
+Available profiles are:
+- `prod`: Public production mode
+- `test`: Local test mode
+- `dev`: Local development mode
 
 To stop the composition, use the following command:
 ```bash
 # Stop the composition:
-docker compose down
+docker compose --profile "test" down
 ```
 
 See step-by-step guide [here](./docs-dev/setup.md).
