@@ -71,6 +71,8 @@ services:
       - 443:443/tcp # HTTPS
       - 443:443/udp # HTTP/3
     networks:
+      # Network for host port mapping
+      proxy:
       # Network to OpenID Provider:
       proxy_op:
         ipv4_address: ${NETWORK_PROXY_OP_PROXY:-172.20.0.2}
@@ -111,6 +113,8 @@ services:
       - 443:443/tcp # HTTPS
       - 443:443/udp # HTTP/3
     networks:
+      # Network for host port mapping
+      proxy:
       # Network to reverse proxy for ACME TLS-ALPN-01 challenge:
       ca_proxy:
         ipv4_address: ${NETWORK_CA_PROXY_PROXY:-172.20.0.27}
@@ -354,6 +358,9 @@ services:
       - op_private_key # Private ICT signing key file
 
 networks:
+  # Network for host port mapping
+  proxy:
+    driver: bridge
   # Network between reverse proxy and OpenID Provider:
   proxy_op:
     driver: bridge
