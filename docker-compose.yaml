@@ -273,16 +273,16 @@ services:
       - traefik.enable=true
       - traefik.http.routers.oidc2middleware.entrypoints=websecure
       - traefik.http.routers.oidc2middleware.priority=2
-      - traefik.http.routers.oidc2middleware.rule=Host(`${OP_HOST:-op.localhost}`) && Path(`/realms/ict/protocol/openid-connect/token`)
+      - traefik.http.routers.oidc2middleware.rule=Host(`${OP_HOST:-op.localhost}`) && Path(`/realms/${KEYCLOAK_REALM:-oidc2}/protocol/openid-connect/token`)
       - traefik.http.routers.oidc2middleware.middlewares=oidc2middleware_pathstrip,oidc2middleware_cors
-      - traefik.http.middlewares.oidc2middleware_pathstrip.stripprefix.prefixes=/realms/ict/protocol/openid-connect/token
+      - traefik.http.middlewares.oidc2middleware_pathstrip.stripprefix.prefixes=/realms/${KEYCLOAK_REALM:-oidc2}/protocol/openid-connect/token
       - traefik.http.middlewares.oidc2middleware_cors.headers.customResponseHeaders.Access-Control-Allow-Origin=${CORS_ALLOWED_ORIGINS:-https://editor.swagger.io}
       - traefik.http.routers.oidc2middleware.service=oidc2middleware
       - traefik.http.services.oidc2middleware.loadbalancer.server.url=http://${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.19}:8080
     environment:
       KEY_FILE: /run/secrets/op_private_key # Private ICT signing key
       KEY_ID: ${KEY_ID} # Key ID of the ICT signing key
-      ISSUER: https://${OP_HOST:-op.example.com}/realms/ict # Issuer of the ICT
+      ISSUER: https://${OP_HOST:-op.example.com}/realms/${KEYCLOAK_REALM:-oidc2} # Issuer of the ICT
       ALG: ${ALG:-RS256} # ICT signing algorithm
       TOKEN_PERIOD: ${TOKEN_PERIOD:-3600} # Lifetime of the ICT
       PORT: 8080
@@ -306,21 +306,23 @@ services:
       - traefik.enable=true
       - traefik.http.routers.oidc2middleware.entrypoints=websecure
       - traefik.http.routers.oidc2middleware.priority=2
-      - traefik.http.routers.oidc2middleware.rule=Host(`${OP_HOST:-op.localhost}`) && Path(`/realms/ict/protocol/openid-connect/token`)
+      - traefik.http.routers.oidc2middleware.rule=Host(`${OP_HOST:-op.localhost}`) && Path(`/realms/${KEYCLOAK_REALM:-oidc2}/protocol/openid-connect/token`)
       - traefik.http.routers.oidc2middleware.middlewares=oidc2middleware_pathstrip,oidc2middleware_cors
-      - traefik.http.middlewares.oidc2middleware_pathstrip.stripprefix.prefixes=/realms/ict/protocol/openid-connect/token
+      - traefik.http.middlewares.oidc2middleware_pathstrip.stripprefix.prefixes=/realms/${KEYCLOAK_REALM:-oidc2}/protocol/openid-connect/token
       - traefik.http.middlewares.oidc2middleware_cors.headers.customResponseHeaders.Access-Control-Allow-Origin=${CORS_ALLOWED_ORIGINS:-https://editor.swagger.io}
       - traefik.http.routers.oidc2middleware.service=oidc2middleware
       - traefik.http.services.oidc2middleware.loadbalancer.server.url=http://${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.19}:8080
     environment:
       KEY_FILE: /run/secrets/op_private_key # Private ICT signing key
       KEY_ID: ${KEY_ID} # Key ID of the ICT signing key
-      ISSUER: https://${OP_HOST:-op.localhost}/realms/ict # Issuer of the ICT
+      ISSUER: https://${OP_HOST:-op.localhost}/realms/${KEYCLOAK_REALM:-oidc2} # Issuer of the ICT
       ALG: ${ALG:-RS256} # ICT signing algorithm
       TOKEN_PERIOD: ${TOKEN_PERIOD:-3600} # Lifetime of the ICT
       PORT: 8080
     secrets:
       - op_private_key # Private ICT signing key file
+    volumes:
+      - ./.secrets/ca_root.crt:/etc/ssl/certs/ca-certificates.crt:ro # Trust internal CA
   oidc2middleware-dev:
     build:
       context: ./
@@ -341,21 +343,23 @@ services:
       - traefik.enable=true
       - traefik.http.routers.oidc2middleware.entrypoints=websecure
       - traefik.http.routers.oidc2middleware.priority=2
-      - traefik.http.routers.oidc2middleware.rule=Host(`${OP_HOST:-op.localhost}`) && Path(`/realms/ict/protocol/openid-connect/token`)
+      - traefik.http.routers.oidc2middleware.rule=Host(`${OP_HOST:-op.localhost}`) && Path(`/realms/${KEYCLOAK_REALM:-oidc2}/protocol/openid-connect/token`)
       - traefik.http.routers.oidc2middleware.middlewares=oidc2middleware_pathstrip,oidc2middleware_cors
-      - traefik.http.middlewares.oidc2middleware_pathstrip.stripprefix.prefixes=/realms/ict/protocol/openid-connect/token
+      - traefik.http.middlewares.oidc2middleware_pathstrip.stripprefix.prefixes=/realms/${KEYCLOAK_REALM:-oidc2}/protocol/openid-connect/token
       - traefik.http.middlewares.oidc2middleware_cors.headers.customResponseHeaders.Access-Control-Allow-Origin=${CORS_ALLOWED_ORIGINS:-https://editor.swagger.io}
       - traefik.http.routers.oidc2middleware.service=oidc2middleware
       - traefik.http.services.oidc2middleware.loadbalancer.server.url=http://${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.19}:8080
     environment:
       KEY_FILE: /run/secrets/op_private_key # Private ICT signing key
       KEY_ID: ${KEY_ID} # Key ID of the ICT signing key
-      ISSUER: https://${OP_HOST:-op.localhost}/realms/ict # Issuer of the ICT
+      ISSUER: https://${OP_HOST:-op.localhost}/realms/${KEYCLOAK_REALM:-oidc2} # Issuer of the ICT
       ALG: ${ALG:-RS256} # ICT signing algorithm
       TOKEN_PERIOD: ${TOKEN_PERIOD:-3600} # Lifetime of the ICT
       PORT: 8080
     secrets:
       - op_private_key # Private ICT signing key file
+    volumes:
+      - ./.secrets/ca_root.crt:/etc/ssl/certs/ca-certificates.crt:ro # Trust internal CA
 
 networks:
   # Network for host port mapping

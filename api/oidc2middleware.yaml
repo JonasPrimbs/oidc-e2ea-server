@@ -13,12 +13,12 @@ info:
 servers:
 - description: Publicly accessible API endpoint for testing with the OIDC E2E Test
     Environment.
-  url: https://op.oidc-e2e.primbs.dev/realms/koala/protocol/openid-connect/token
+  url: https://op.oidc-e2e.primbs.dev/realms/oidc2/protocol/openid-connect
 - description: "Local development API endpoint for testing with a local OpenID Provider\
     \ (e.g., Keycloak)."
-  url: http://op.localhost/realms/koala/protocol/openid-connect/token
+  url: http://op.localhost/realms/oidc2/protocol/openid-connect
 paths:
-  /:
+  /token:
     description: |
       This is the endpoint for requesting tokens from the authorization server.
       The application proxies all requests to the authorization server except token exchange requests for an Identity Certification Token, which are handled by the application itself.
