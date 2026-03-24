@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -42,30 +43,25 @@ func NewDefaultAPIService() *DefaultAPIService {
 
 // TokenRequest - Request a token.
 func (s *DefaultAPIService) TokenRequest(ctx context.Context, grantType string, clientId string, code string, redirectUri string, clientSecret string, refreshToken string, scope string, resource string, audience string, subjectToken string, subjectTokenType string, actorToken string, actorTokenType string, dpop string) (ImplResponse, error) {
-	cfg, err := LoadConfigurationFromEnv()
-	if err != nil {
-		return Response(http.StatusInternalServerError, ErrorStatus{
-			Error:            "server_error",
-			ErrorDescription: err.Error(),
-		}), nil
-	}
+	cfg := Configuration
 
 	if !isICTRequest(grantType) {
+		log.Printf("Received non-ICT token request with grant_type=%q, forwarding to token endpoint", grantType)
 		return forwardTokenRequest(ctx, cfg, map[string]string{
-			"grant_type":        grantType,
-			"client_id":         clientId,
-			"code":              code,
-			"redirect_uri":      redirectUri,
-			"client_secret":     clientSecret,
-			"refresh_token":     refreshToken,
-			"scope":             scope,
-			"resource":          resource,
-			"audience":          audience,
-			"subject_token":     subjectToken,
+			"grant_type":         grantType,
+			"client_id":          clientId,
+			"code":               code,
+			"redirect_uri":       redirectUri,
+			"client_secret":      clientSecret,
+			"refresh_token":      refreshToken,
+			"scope":              scope,
+			"resource":           resource,
+			"audience":           audience,
+			"subject_token":      subjectToken,
 			"subject_token_type": subjectTokenType,
-			"actor_token":       actorToken,
-			"actor_token_type":  actorTokenType,
-			"dpop":              dpop,
+			"actor_token":        actorToken,
+			"actor_token_type":   actorTokenType,
+			"dpop":               dpop,
 		})
 	}
 
@@ -93,7 +89,7 @@ func (s *DefaultAPIService) TokenRequest(ctx context.Context, grantType string, 
 		return oauthError(http.StatusForbidden, "insufficient_scope", "subject_token does not contain the required scope"), nil
 	}
 
-	_, err = validateDPoPProof(dpop, introspection.Cnf.Jkt)
+	_, err := validateDPoPProof(dpop, introspection.Cnf.Jkt)
 	if err != nil {
 		return oauthError(http.StatusBadRequest, "invalid_dpop_proof", err.Error()), nil
 	}

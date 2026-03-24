@@ -138,7 +138,7 @@ ISSUER="https://op.example.com/"
 
 Example 2 (Keycloak running locally):
 ```bash
-ISSUER="http://localhost:8080/realms/ict"
+ISSUER="http://localhost:8080/realms/oidc2"
 ```
 
 This variable is **required**.
@@ -240,7 +240,7 @@ Example (localhost only):
 HOSTS=127.0.0.1,::1
 ```
 
-Default value is `0.0.0.0/0` (all hosts).
+Default value is `0.0.0.0` (all IPv4 hosts).
 
 ## 4. REST Documentation
 The [OpenAPI](https://swagger.io/specification/) documentation of the RESTful API is provided [here](./api/oidc2middleware.yaml).

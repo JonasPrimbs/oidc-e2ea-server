@@ -18,14 +18,13 @@ import (
 )
 
 func main() {
-	log.Printf("Starting server...")
-
 	// Load configuration from environment variables
 	log.Printf("Loading configuration...")
 	appConfig, err := oidc2middleware.LoadConfigurationFromEnv()
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
+	oidc2middleware.Configuration = appConfig
 	log.Printf("Configuration loaded: %+v", appConfig)
 
 	log.Printf("Initializing API services...")
@@ -35,7 +34,7 @@ func main() {
 
 	for _, listener := range appConfig.Listeners {
 		addr := listener + ":" + strconv.Itoa(appConfig.Port)
-		log.Printf("Server started on http://%s", addr)
+		log.Printf("Starting server on http://%s", addr)
 		go func(addr string) {
 			if err := http.ListenAndServe(addr, router); err != nil {
 				log.Fatalf("Server failed on http://%s: %v", addr, err)

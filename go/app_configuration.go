@@ -30,6 +30,8 @@ type AppConfiguration struct {
 	Listeners             []string
 }
 
+var Configuration *AppConfiguration
+
 func LoadConfigurationFromEnv() (*AppConfiguration, error) {
 	// Ensure that required parameters are set
 	keyFile := os.Getenv("KEY_FILE")
@@ -94,7 +96,7 @@ func LoadConfigurationFromEnv() (*AppConfiguration, error) {
 		Algorithm:             algorithm,
 		TokenPeriod:           tokenPeriod,
 		Port:                  port,
-		Listeners:             parseListeners(getEnvOrDefault("HOSTS", "0.0.0.0/0")),
+		Listeners:             parseListeners(getEnvOrDefault("HOSTS", "0.0.0.0")),
 	}, nil
 }
 
@@ -129,7 +131,7 @@ func isValidTokenPeriod(period int) bool {
 func parseListeners(hostsStr string) []string {
 	if hostsStr == "" {
 		return []string{
-			"0.0.0.0/0",
+			"0.0.0.0",
 		}
 	}
 
@@ -138,7 +140,7 @@ func parseListeners(hostsStr string) []string {
 
 	for _, listener := range listeners {
 		listener = strings.TrimSpace(listener)
-		if isValidCIDR(listener) {
+		if isValidCIDR(listener) || net.ParseIP(listener) != nil {
 			validListeners = append(validListeners, listener)
 		}
 	}
