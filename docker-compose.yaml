@@ -273,7 +273,7 @@ services:
       - traefik.enable=true
       - traefik.http.routers.oidc2middleware.entrypoints=websecure
       - traefik.http.routers.oidc2middleware.priority=2
-      - traefik.http.routers.oidc2middleware.rule=Host(`${OP_HOST:-op.localhost}`) && Path(`/realms/${KEYCLOAK_REALM:-oidc2}/protocol/openid-connect/token`)
+      - traefik.http.routers.oidc2middleware.rule=!ClientIP(`${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.19}`) && Host(`${OP_HOST:-op.localhost}`) && Path(`/realms/${KEYCLOAK_REALM:-oidc2}/protocol/openid-connect/token`) # Redirect token request to OIDC² middleware for external requests only
       - traefik.http.routers.oidc2middleware.middlewares=oidc2middleware_pathstrip,oidc2middleware_cors
       - traefik.http.middlewares.oidc2middleware_pathstrip.stripprefix.prefixes=/realms/${KEYCLOAK_REALM:-oidc2}/protocol/openid-connect/token
       - traefik.http.middlewares.oidc2middleware_cors.headers.customResponseHeaders.Access-Control-Allow-Origin=${CORS_ALLOWED_ORIGINS:-https://editor.swagger.io}
@@ -306,7 +306,7 @@ services:
       - traefik.enable=true
       - traefik.http.routers.oidc2middleware.entrypoints=websecure
       - traefik.http.routers.oidc2middleware.priority=2
-      - traefik.http.routers.oidc2middleware.rule=Host(`${OP_HOST:-op.localhost}`) && Path(`/realms/${KEYCLOAK_REALM:-oidc2}/protocol/openid-connect/token`)
+      - traefik.http.routers.oidc2middleware.rule=!ClientIP(`${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.19}`) && Host(`${OP_HOST:-op.localhost}`) && Path(`/realms/${KEYCLOAK_REALM:-oidc2}/protocol/openid-connect/token`) # Redirect token request to OIDC² middleware for external requests only
       - traefik.http.routers.oidc2middleware.middlewares=oidc2middleware_pathstrip,oidc2middleware_cors
       - traefik.http.middlewares.oidc2middleware_pathstrip.stripprefix.prefixes=/realms/${KEYCLOAK_REALM:-oidc2}/protocol/openid-connect/token
       - traefik.http.middlewares.oidc2middleware_cors.headers.customResponseHeaders.Access-Control-Allow-Origin=${CORS_ALLOWED_ORIGINS:-https://editor.swagger.io}
@@ -343,7 +343,7 @@ services:
       - traefik.enable=true
       - traefik.http.routers.oidc2middleware.entrypoints=websecure
       - traefik.http.routers.oidc2middleware.priority=2
-      - traefik.http.routers.oidc2middleware.rule=Host(`${OP_HOST:-op.localhost}`) && Path(`/realms/${KEYCLOAK_REALM:-oidc2}/protocol/openid-connect/token`)
+      - traefik.http.routers.oidc2middleware.rule=!ClientIP(`${NETWORK_PROXY_OIDC2MIDDLEWARE_OIDC2MIDDLEWARE:-172.20.0.19}`) && Host(`${OP_HOST:-op.localhost}`) && Path(`/realms/${KEYCLOAK_REALM:-oidc2}/protocol/openid-connect/token`) # Redirect token request to OIDC² middleware for external requests only
       - traefik.http.routers.oidc2middleware.middlewares=oidc2middleware_pathstrip,oidc2middleware_cors
       - traefik.http.middlewares.oidc2middleware_pathstrip.stripprefix.prefixes=/realms/${KEYCLOAK_REALM:-oidc2}/protocol/openid-connect/token
       - traefik.http.middlewares.oidc2middleware_cors.headers.customResponseHeaders.Access-Control-Allow-Origin=${CORS_ALLOWED_ORIGINS:-https://editor.swagger.io}
