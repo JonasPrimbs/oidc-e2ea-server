@@ -107,13 +107,36 @@ func (c *DefaultAPIController) TokenRequest(w http.ResponseWriter, r *http.Reque
 	subjectTokenParam := r.FormValue("subject_token")
 
 	subjectTokenTypeParam := r.FormValue("subject_token_type")
+	
+	requestedTokenTypeParam := r.FormValue("requested_token_type")
 
 	actorTokenParam := r.FormValue("actor_token")
 
 	actorTokenTypeParam := r.FormValue("actor_token_type")
 
-	dpopParam := r.FormValue("dpop")
-	result, err := c.service.TokenRequest(r.Context(), grantTypeParam, clientIdParam, codeParam, redirectUriParam, clientSecretParam, refreshTokenParam, scopeParam, resourceParam, audienceParam, subjectTokenParam, subjectTokenTypeParam, actorTokenParam, actorTokenTypeParam, dpopParam)
+	// Accept DPoP proof from the standard DPoP HTTP header
+	// Fallback: The dpop form field for backward compatibility
+	dpopParam := r.Header.Get("DPoP")
+	if dpopParam == "" {
+		dpopParam = r.FormValue("dpop")
+	}
+
+	authorizationParam := r.Header.Get("Authorization")
+
+	// Reconstruct the full request URL so the service can validate the DPoP htu claim
+	scheme := "https"
+	if fwdProto := r.Header.Get("X-Forwarded-Proto"); fwdProto != "" {
+		scheme = fwdProto
+	} else if r.TLS == nil {
+		scheme = "http"
+	}
+	host := r.Host
+	if fwdHost := r.Header.Get("X-Forwarded-Host"); fwdHost != "" {
+		host = fwdHost
+	}
+	requestURLParam := scheme + "://" + host + r.URL.Path
+
+	result, err := c.service.TokenRequest(r.Context(), grantTypeParam, clientIdParam, codeParam, redirectUriParam, clientSecretParam, refreshTokenParam, scopeParam, resourceParam, audienceParam, subjectTokenParam, subjectTokenTypeParam, requestedTokenTypeParam, actorTokenParam, actorTokenTypeParam, dpopParam, authorizationParam, requestURLParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -125,12 +148,8 @@ func (c *DefaultAPIController) TokenRequest(w http.ResponseWriter, r *http.Reque
 
 // TokenRequestPreflight - CORS preflight request
 func (c *DefaultAPIController) TokenRequestPreflight(w http.ResponseWriter, r *http.Request) {
-	result, err := c.service.TokenRequestPreflight(r.Context())
-	// If an error occurred, encode the error with the status code
-	if err != nil {
-		c.errorHandler(w, r, err, &result)
-		return
-	}
-	// If no error, encode the body and the result code
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, DPoP")
+	w.WriteHeader(http.StatusNoContent)
 }

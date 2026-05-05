@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -42,11 +43,11 @@ func NewDefaultAPIService() *DefaultAPIService {
 }
 
 // TokenRequest - Request a token.
-func (s *DefaultAPIService) TokenRequest(ctx context.Context, grantType string, clientId string, code string, redirectUri string, clientSecret string, refreshToken string, scope string, resource string, audience string, subjectToken string, subjectTokenType string, actorToken string, actorTokenType string, dpop string) (ImplResponse, error) {
+func (s *DefaultAPIService) TokenRequest(ctx context.Context, grantType string, clientId string, code string, redirectUri string, clientSecret string, refreshToken string, scope string, resource string, audience string, subjectToken string, subjectTokenType string, requestedTokenType string, actorToken string, actorTokenType string, dpop string, authorizationHeader string, requestURL string) (ImplResponse, error) {
 	cfg := Configuration
 
-	if !isICTRequest(grantType) {
-		log.Printf("Received non-ICT token request with grant_type=%q, forwarding to token endpoint", grantType)
+	if !isICTRequest(grantType, requestedTokenType) {
+		log.Printf("Received non-ICT token request with grant_type=%q requested_token_type=%q, forwarding to token endpoint", grantType, requestedTokenType)
 		return forwardTokenRequest(ctx, cfg, map[string]string{
 			"grant_type":         grantType,
 			"client_id":          clientId,
@@ -59,10 +60,10 @@ func (s *DefaultAPIService) TokenRequest(ctx context.Context, grantType string, 
 			"audience":           audience,
 			"subject_token":      subjectToken,
 			"subject_token_type": subjectTokenType,
+			"requested_token_type": requestedTokenType,
 			"actor_token":        actorToken,
 			"actor_token_type":   actorTokenType,
-			"dpop":               dpop,
-		})
+		}, dpop, authorizationHeader)
 	}
 
 	if subjectToken == "" {
@@ -89,7 +90,7 @@ func (s *DefaultAPIService) TokenRequest(ctx context.Context, grantType string, 
 		return oauthError(http.StatusForbidden, "insufficient_scope", "subject_token does not contain the required scope"), nil
 	}
 
-	_, err := validateDPoPProof(dpop, introspection.Cnf.Jkt)
+	_, err := validateDPoPProof(dpop, introspection.Cnf.Jkt, requestURL)
 	if err != nil {
 		return oauthError(http.StatusBadRequest, "invalid_dpop_proof", err.Error()), nil
 	}
@@ -195,12 +196,19 @@ type dpopProofClaims struct {
 	jwt.RegisteredClaims
 }
 
-func isICTRequest(grantType string) bool {
-	// The generated service signature does not currently expose requested_token_type.
-	return grantType == "urn:ietf:params:oauth:grant-type:token-exchange"
+func isICTRequest(grantType, requestedTokenType string) bool {
+	if grantType != "urn:ietf:params:oauth:grant-type:token-exchange" {
+		return false
+	}
+	// When requested_token_type is absent, default to ICT for backward compatibility
+	// with clients that omit the field. When it is present it MUST be ic_token.
+	if requestedTokenType == "" {
+		return true
+	}
+	return requestedTokenType == "urn:ietf:params:oauth:token-type:ic_token"
 }
 
-func forwardTokenRequest(ctx context.Context, cfg *AppConfiguration, fields map[string]string) (ImplResponse, error) {
+func forwardTokenRequest(ctx context.Context, cfg *AppConfiguration, fields map[string]string, dpopProof string, authorizationHeader string) (ImplResponse, error) {
 	form := url.Values{}
 	for key, value := range fields {
 		if value != "" {
@@ -216,6 +224,14 @@ func forwardTokenRequest(ctx context.Context, cfg *AppConfiguration, fields map[
 		}), nil
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// Forward the DPoP proof as an HTTP header so Keycloak can
+	// bind the issued access token to the client's public key when DPoP is used
+	if dpopProof != "" {
+		req.Header.Set("DPoP", dpopProof)
+	}
+	if authorizationHeader != "" {
+		req.Header.Set("Authorization", authorizationHeader)
+	}
 
 	return doJSONRequest(req)
 }
@@ -285,7 +301,33 @@ func hasRequiredScopes(granted, requested string) bool {
 	return true
 }
 
-func validateDPoPProof(raw string, expectedJKT string) (*dpopProofClaims, error) {
+// dpopProofMaxAge is the maximum acceptable age of a DPoP proof
+const dpopProofMaxAge = 5 * time.Minute
+
+// jtiEntry holds the expiry time for a DPoP proof jti stored in the replay cache
+type jtiEntry struct {
+	expiresAt time.Time
+}
+
+// dpopJTICache stores recently seen DPoP proof JTIs to prevent replay attacks
+var dpopJTICache sync.Map
+
+func init() {
+	// GC to maintain clear cache
+	go func() {
+		for range time.Tick(time.Minute) {
+			now := time.Now()
+			dpopJTICache.Range(func(k, v interface{}) bool {
+				if e, ok := v.(jtiEntry); ok && now.After(e.expiresAt) {
+					dpopJTICache.Delete(k)
+				}
+				return true
+			})
+		}
+	}()
+}
+
+func validateDPoPProof(raw string, expectedJKT string, expectedHTU string) (*dpopProofClaims, error) {
 	parser := jwt.NewParser(
 		jwt.WithValidMethods([]string{"ES256", "ES384", "ES512", "RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "EdDSA"}),
 		jwt.WithIssuedAt(),
@@ -294,6 +336,11 @@ func validateDPoPProof(raw string, expectedJKT string) (*dpopProofClaims, error)
 
 	claims := &dpopProofClaims{}
 	token, err := parser.ParseWithClaims(raw, claims, func(token *jwt.Token) (interface{}, error) {
+		// The typ JOSE header MUST be "dpop+jwt"
+		typHeader, _ := token.Header["typ"].(string)
+		if !strings.EqualFold(typHeader, "dpop+jwt") {
+			return nil, fmt.Errorf("dpop proof typ must be dpop+jwt, got %q", typHeader)
+		}
 		jwkHeader, ok := token.Header["jwk"]
 		if !ok {
 			return nil, errors.New("missing jwk header")
@@ -326,11 +373,25 @@ func validateDPoPProof(raw string, expectedJKT string) (*dpopProofClaims, error)
 	if !strings.EqualFold(claims.HTM, http.MethodPost) {
 		return nil, errors.New("invalid htm claim in dpop proof")
 	}
+	// htu MUST match the target URI of the HTTP request
+	if expectedHTU != "" {
+		if !strings.EqualFold(
+			strings.TrimRight(claims.HTU, "/"),
+			strings.TrimRight(expectedHTU, "/"),
+		) {
+			return nil, fmt.Errorf("invalid htu claim: got %q, expected %q", claims.HTU, expectedHTU)
+		}
+	}
 	if claims.JTI == "" {
 		return nil, errors.New("missing jti claim in dpop proof")
 	}
-	if claims.IssuedAt == nil || time.Since(claims.IssuedAt.Time) > 5*time.Minute {
+	if claims.IssuedAt == nil || time.Since(claims.IssuedAt.Time) > dpopProofMaxAge {
 		return nil, errors.New("dpop proof is stale")
+	}
+	// Reject replayed DPoP proofs by checking the jti uniqueness
+	expiresAt := claims.IssuedAt.Time.Add(dpopProofMaxAge)
+	if _, alreadySeen := dpopJTICache.LoadOrStore(claims.JTI, jtiEntry{expiresAt: expiresAt}); alreadySeen {
+		return nil, errors.New("dpop proof jti has already been used (replay attack)")
 	}
 	return claims, nil
 }
@@ -413,6 +474,7 @@ func issueICT(cfg *AppConfiguration, clientID string, introspection *introspecti
 
 	token := jwt.NewWithClaims(signingMethod(cfg.Algorithm), claims)
 	token.Header["kid"] = cfg.KeyID
+	token.Header["typ"] = "jwt+ict"
 	return token.SignedString(signingKey)
 }
 
