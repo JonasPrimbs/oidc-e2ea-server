@@ -26,6 +26,6 @@ type DefaultAPIRouter interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type DefaultAPIServicer interface {
-	TokenRequest(context.Context, string, string, string, string, string, string, string, string, string, string, string, string, string, string) (ImplResponse, error)
+	TokenRequest(context.Context, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string) (ImplResponse, error)
 	TokenRequestPreflight(context.Context) (ImplResponse, error)
 }

@@ -10,6 +10,7 @@ package oidc2middleware
 
 import (
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -107,13 +108,38 @@ func (c *DefaultAPIController) TokenRequest(w http.ResponseWriter, r *http.Reque
 	subjectTokenParam := r.FormValue("subject_token")
 
 	subjectTokenTypeParam := r.FormValue("subject_token_type")
+	
+	requestedTokenTypeParam := r.FormValue("requested_token_type")
 
 	actorTokenParam := r.FormValue("actor_token")
 
 	actorTokenTypeParam := r.FormValue("actor_token_type")
 
-	dpopParam := r.FormValue("dpop")
-	result, err := c.service.TokenRequest(r.Context(), grantTypeParam, clientIdParam, codeParam, redirectUriParam, clientSecretParam, refreshTokenParam, scopeParam, resourceParam, audienceParam, subjectTokenParam, subjectTokenTypeParam, actorTokenParam, actorTokenTypeParam, dpopParam)
+	// Accept DPoP proof from the standard DPoP HTTP header
+	dpopParam := r.Header.Get("DPoP")
+
+	authorizationParam := r.Header.Get("Authorization")
+
+	// Reconstruct the full request URL so the service can validate the DPoP htu claim
+	scheme := "https"
+	if fwdProto := r.Header.Get("X-Forwarded-Proto"); fwdProto != "" {
+		scheme = fwdProto
+	} else if r.TLS == nil {
+		scheme = "http"
+	}
+	host := r.Host
+	if fwdHost := r.Header.Get("X-Forwarded-Host"); fwdHost != "" {
+		host = fwdHost
+	}
+	path := r.URL.Path
+	if replacedPath := r.Header.Get("X-Replaced-Path"); replacedPath != "" {
+		path = replacedPath
+	} else if forwardedPrefix := r.Header.Get("X-Forwarded-Prefix"); forwardedPrefix != "" {
+		path = strings.TrimRight(forwardedPrefix, "/") + "/" + strings.TrimLeft(r.URL.Path, "/")
+	}
+	requestURLParam := scheme + "://" + host + path
+
+	result, err := c.service.TokenRequest(r.Context(), grantTypeParam, clientIdParam, codeParam, redirectUriParam, clientSecretParam, refreshTokenParam, scopeParam, resourceParam, audienceParam, subjectTokenParam, subjectTokenTypeParam, requestedTokenTypeParam, actorTokenParam, actorTokenTypeParam, dpopParam, authorizationParam, requestURLParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -125,12 +151,33 @@ func (c *DefaultAPIController) TokenRequest(w http.ResponseWriter, r *http.Reque
 
 // TokenRequestPreflight - CORS preflight request
 func (c *DefaultAPIController) TokenRequestPreflight(w http.ResponseWriter, r *http.Request) {
-	result, err := c.service.TokenRequestPreflight(r.Context())
-	// If an error occurred, encode the error with the status code
-	if err != nil {
-		c.errorHandler(w, r, err, &result)
+	origin := r.Header.Get("Origin")
+	allowedOrigin := getAllowedOrigin(origin)
+	if origin != "" && allowedOrigin == "" {
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
-	// If no error, encode the body and the result code
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+	if allowedOrigin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+		w.Header().Set("Vary", "Origin")
+	}
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, DPoP")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func getAllowedOrigin(origin string) string {
+	if origin == "" {
+		return ""
+	}
+
+	for _, allowed := range strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",") {
+		allowed = strings.TrimSpace(allowed)
+		if allowed != "" && allowed == origin {
+			return origin
+		}
+	}
+
+	return ""
 }
