@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -302,7 +303,22 @@ func hasRequiredScopes(granted, requested string) bool {
 }
 
 // dpopProofMaxAge is the maximum acceptable age of a DPoP proof
-const dpopProofMaxAge = 5 * time.Minute
+var dpopProofMaxAge = getDPoPProofMaxAge()
+
+func getDPoPProofMaxAge() time.Duration {
+	const defaultMaxAge = 5 * time.Minute
+
+	raw := strings.TrimSpace(os.Getenv("DPOP_MAX_AGE"))
+	if raw == "" {
+		return defaultMaxAge
+	}
+
+	if seconds, err := strconv.Atoi(raw); err == nil && seconds > 0 {
+		return time.Duration(seconds) * time.Second
+	}
+
+	return defaultMaxAge
+}
 
 // jtiEntry holds the expiry time for a DPoP proof jti stored in the replay cache
 type jtiEntry struct {

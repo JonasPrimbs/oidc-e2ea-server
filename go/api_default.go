@@ -10,6 +10,7 @@ package oidc2middleware
 
 import (
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -115,11 +116,7 @@ func (c *DefaultAPIController) TokenRequest(w http.ResponseWriter, r *http.Reque
 	actorTokenTypeParam := r.FormValue("actor_token_type")
 
 	// Accept DPoP proof from the standard DPoP HTTP header
-	// Fallback: The dpop form field for backward compatibility
 	dpopParam := r.Header.Get("DPoP")
-	if dpopParam == "" {
-		dpopParam = r.FormValue("dpop")
-	}
 
 	authorizationParam := r.Header.Get("Authorization")
 
@@ -134,7 +131,13 @@ func (c *DefaultAPIController) TokenRequest(w http.ResponseWriter, r *http.Reque
 	if fwdHost := r.Header.Get("X-Forwarded-Host"); fwdHost != "" {
 		host = fwdHost
 	}
-	requestURLParam := scheme + "://" + host + r.URL.Path
+	path := r.URL.Path
+	if replacedPath := r.Header.Get("X-Replaced-Path"); replacedPath != "" {
+		path = replacedPath
+	} else if forwardedPrefix := r.Header.Get("X-Forwarded-Prefix"); forwardedPrefix != "" {
+		path = strings.TrimRight(forwardedPrefix, "/") + "/" + strings.TrimLeft(r.URL.Path, "/")
+	}
+	requestURLParam := scheme + "://" + host + path
 
 	result, err := c.service.TokenRequest(r.Context(), grantTypeParam, clientIdParam, codeParam, redirectUriParam, clientSecretParam, refreshTokenParam, scopeParam, resourceParam, audienceParam, subjectTokenParam, subjectTokenTypeParam, requestedTokenTypeParam, actorTokenParam, actorTokenTypeParam, dpopParam, authorizationParam, requestURLParam)
 	// If an error occurred, encode the error with the status code
@@ -148,8 +151,33 @@ func (c *DefaultAPIController) TokenRequest(w http.ResponseWriter, r *http.Reque
 
 // TokenRequestPreflight - CORS preflight request
 func (c *DefaultAPIController) TokenRequestPreflight(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	origin := r.Header.Get("Origin")
+	allowedOrigin := getAllowedOrigin(origin)
+	if origin != "" && allowedOrigin == "" {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	if allowedOrigin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+		w.Header().Set("Vary", "Origin")
+	}
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, DPoP")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func getAllowedOrigin(origin string) string {
+	if origin == "" {
+		return ""
+	}
+
+	for _, allowed := range strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",") {
+		allowed = strings.TrimSpace(allowed)
+		if allowed != "" && allowed == origin {
+			return origin
+		}
+	}
+
+	return ""
 }
