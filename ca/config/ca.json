@@ -1,0 +1,39 @@
+{
+  "root": "/run/secrets/ca_root_cert",
+  "federatedRoots": null,
+  "crt": "/run/secrets/ca_intermediate_cert",
+  "key": "/run/secrets/ca_intermediate_key",
+  "address": ":443",
+  "dnsNames": [
+    "ca.localhost"
+  ],
+  "logger": {
+    "format": "text",
+    "level": "info"
+  },
+  "crl": {
+    "enabled": false
+  },
+  "db": {
+    "type": "postgresql"
+  },
+  "policy": {
+    "x509": {
+      "allow": {
+        "dns": [
+          "ca.localhost",
+          "op.localhost"
+        ]
+      },
+      "allowWildcardNames": false
+    }
+  },
+  "authority": {
+    "provisioners": [
+      {
+        "type": "ACME",
+        "name": "internal"
+      }
+    ]
+  }
+}
