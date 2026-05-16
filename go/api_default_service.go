@@ -73,9 +73,6 @@ func (s *DefaultAPIService) TokenRequest(ctx context.Context, grantType string, 
 	if subjectTokenType != "" && subjectTokenType != "urn:ietf:params:oauth:token-type:access_token" {
 		return oauthError(http.StatusBadRequest, "invalid_request", "subject_token_type must identify an access token"), nil
 	}
-	if dpop == "" {
-		return oauthError(http.StatusBadRequest, "invalid_dpop_proof", "dpop proof is required for DPoP-bound subject tokens"), nil
-	}
 
 	introspection, errResp := introspectToken(ctx, cfg, subjectToken)
 	if errResp != nil {
@@ -84,22 +81,30 @@ func (s *DefaultAPIService) TokenRequest(ctx context.Context, grantType string, 
 	if !introspection.Active {
 		return oauthError(http.StatusBadRequest, "invalid_grant", "subject_token is inactive"), nil
 	}
-	if !introspection.IsDPoPToken() {
-		return oauthError(http.StatusBadRequest, "invalid_grant", "subject_token is not a DPoP access token"), nil
-	}
 	if scope != "" && !hasRequiredScopes(introspection.Scope, scope) {
 		return oauthError(http.StatusForbidden, "insufficient_scope", "subject_token does not contain the required scope"), nil
 	}
 
-	_, err := validateDPoPProof(dpop, introspection.Cnf.Jkt, requestURL)
-	if err != nil {
+	subjectJkt := resolveSubjectTokenJkt(introspection, subjectToken)
+	if subjectJkt == "" {
+		return oauthError(
+			http.StatusBadRequest,
+			"invalid_token",
+			"subject_token must be a DPoP-bound access token (cnf.jkt required for ICT exchange)",
+		), nil
+	}
+	if strings.TrimSpace(dpop) == "" {
+		return oauthError(
+			http.StatusBadRequest,
+			"invalid_dpop_proof",
+			"DPoP proof header is required for ICT token exchange",
+		), nil
+	}
+	if _, err := validateDPoPProof(dpop, subjectJkt, requestURL); err != nil {
 		return oauthError(http.StatusBadRequest, "invalid_dpop_proof", err.Error()), nil
 	}
-
-	userInfo, errResp := fetchUserInfo(ctx, cfg, subjectToken)
-	if errResp != nil {
-		return *errResp, nil
-	}
+	introspection.Cnf.Jkt = subjectJkt
+	userInfo := userInfoFromIntrospection(introspection)
 
 	issuedAt := time.Now().UTC()
 	expiresAt := issuedAt.Add(time.Duration(cfg.TokenPeriod) * time.Second)
@@ -188,6 +193,42 @@ func (r *introspectionResponse) UnmarshalJSON(data []byte) error {
 
 func (r introspectionResponse) IsDPoPToken() bool {
 	return strings.EqualFold(r.TokenType, "DPoP") || r.Cnf.Jkt != ""
+}
+
+// Returns the confirmation thumbprint for subjectToken
+func resolveSubjectTokenJkt(introspection *introspectionResponse, subjectToken string) string {
+	if introspection.Cnf.Jkt != "" {
+		return introspection.Cnf.Jkt
+	}
+	return jktFromAccessTokenJWT(subjectToken)
+}
+
+func jktFromAccessTokenJWT(accessToken string) string {
+	parts := strings.Split(accessToken, ".")
+	if len(parts) != 3 {
+		return ""
+	}
+	payload, err := decodeBase64URLField(parts[1])
+	if err != nil {
+		return ""
+	}
+	var claims map[string]interface{}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return ""
+	}
+	cnf, ok := claims["cnf"].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	jkt, _ := cnf["jkt"].(string)
+	return strings.TrimSpace(jkt)
+}
+
+func jktLogPrefix(jkt string) string {
+	if len(jkt) <= 8 {
+		return jkt
+	}
+	return jkt[:8]
 }
 
 type dpopProofClaims struct {
@@ -412,6 +453,21 @@ func validateDPoPProof(raw string, expectedJKT string, expectedHTU string) (*dpo
 	return claims, nil
 }
 
+// Maps introspection fields into ICT claim inputs
+func userInfoFromIntrospection(introspection *introspectionResponse) map[string]interface{} {
+	userInfo := map[string]interface{}{}
+	if introspection.Sub != "" {
+		userInfo["sub"] = introspection.Sub
+	}
+	if introspection.Username != "" {
+		userInfo["preferred_username"] = introspection.Username
+	}
+	for key, value := range introspection.Extra {
+		userInfo[key] = value
+	}
+	return userInfo
+}
+
 func fetchUserInfo(ctx context.Context, cfg *AppConfiguration, subjectToken string) (map[string]interface{}, *ImplResponse) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.UserInfoEndpoint, nil)
 	if err != nil {
@@ -573,11 +629,11 @@ func publicKeyFromJWK(jwk map[string]interface{}) (interface{}, error) {
 		crv, _ := jwk["crv"].(string)
 		xStr, _ := jwk["x"].(string)
 		yStr, _ := jwk["y"].(string)
-		xBytes, err := base64.RawURLEncoding.DecodeString(xStr)
+		xBytes, err := decodeBase64URLField(xStr)
 		if err != nil {
 			return nil, err
 		}
-		yBytes, err := base64.RawURLEncoding.DecodeString(yStr)
+		yBytes, err := decodeBase64URLField(yStr)
 		if err != nil {
 			return nil, err
 		}
@@ -593,11 +649,11 @@ func publicKeyFromJWK(jwk map[string]interface{}) (interface{}, error) {
 	case "RSA":
 		nStr, _ := jwk["n"].(string)
 		eStr, _ := jwk["e"].(string)
-		nBytes, err := base64.RawURLEncoding.DecodeString(nStr)
+		nBytes, err := decodeBase64URLField(nStr)
 		if err != nil {
 			return nil, err
 		}
-		eBytes, err := base64.RawURLEncoding.DecodeString(eStr)
+		eBytes, err := decodeBase64URLField(eStr)
 		if err != nil {
 			return nil, err
 		}
@@ -615,7 +671,7 @@ func publicKeyFromJWK(jwk map[string]interface{}) (interface{}, error) {
 			return nil, fmt.Errorf("unsupported OKP curve %q", crv)
 		}
 		xStr, _ := jwk["x"].(string)
-		xBytes, err := base64.RawURLEncoding.DecodeString(xStr)
+		xBytes, err := decodeBase64URLField(xStr)
 		if err != nil {
 			return nil, err
 		}
@@ -634,21 +690,25 @@ func jwkThumbprint(jwk map[string]interface{}) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
 }
 
+func trimJWKEncoding(s string) string {
+	return strings.TrimRight(strings.TrimSpace(s), "=")
+}
+
 func canonicalJWK(jwk map[string]interface{}) (string, error) {
 	kty, _ := jwk["kty"].(string)
 	switch kty {
 	case "EC":
 		crv, _ := jwk["crv"].(string)
-		x, _ := jwk["x"].(string)
-		y, _ := jwk["y"].(string)
+		x := trimJWKEncoding(jwk["x"].(string))
+		y := trimJWKEncoding(jwk["y"].(string))
 		return fmt.Sprintf("{\"crv\":\"%s\",\"kty\":\"EC\",\"x\":\"%s\",\"y\":\"%s\"}", crv, x, y), nil
 	case "RSA":
-		e, _ := jwk["e"].(string)
-		n, _ := jwk["n"].(string)
+		e := trimJWKEncoding(jwk["e"].(string))
+		n := trimJWKEncoding(jwk["n"].(string))
 		return fmt.Sprintf("{\"e\":\"%s\",\"kty\":\"RSA\",\"n\":\"%s\"}", e, n), nil
 	case "OKP":
 		crv, _ := jwk["crv"].(string)
-		x, _ := jwk["x"].(string)
+		x := trimJWKEncoding(jwk["x"].(string))
 		return fmt.Sprintf("{\"crv\":\"%s\",\"kty\":\"OKP\",\"x\":\"%s\"}", crv, x), nil
 	default:
 		return "", fmt.Errorf("unsupported jwk key type %q", kty)

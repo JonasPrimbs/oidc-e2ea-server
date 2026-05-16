@@ -50,8 +50,30 @@ If the client performs a token exchange request `requested_token_type=urn:ietf:p
 ```
 **Figure 2**: Identity Certification Token request.
 
+### 1.1. ICT and DPoP (strict policy)
+
+For **ICT token exchange** (`grant_type=urn:ietf:params:oauth:grant-type:token-exchange` and `requested_token_type=urn:ietf:params:oauth:token-type:ic_token`, or omitted `requested_token_type`), the middleware enforces:
+
+1. **Subject token** must be a **DPoP-bound access token** (`cnf.jkt` in introspection or in the JWT payload).
+2. The client must send a valid **`DPoP` proof** for the ICT POST (`htm=POST`, `htu` = middleware token URL).
+3. The proof’s public key must match the subject token’s `cnf.jkt`.
+
+Bearer-only subject tokens are **rejected** for ICT. The issued ICT always includes `cnf.jkt` carrying forward the binding.
+
+All **other** token requests (authorization code, refresh, non-ICT token exchange, etc.) are **proxied to Keycloak** as-is; DPoP is optional on those forwarded calls.
+
 ## 2. Setup
-The provided [Docker composition](./docker-compose.yaml) contains an example for the following software:
+
+There are two ways to run the middleware locally:
+
+| Setup | Compose file | OpenID Provider | Typical use |
+|-------|--------------|-----------------|-------------|
+| **Full stack** | [`docker-compose.yaml`](./docker-compose.yaml) | Local Keycloak + Traefik + internal CA | Integration tests, Swagger/Postman against `op.localhost` |
+| **Middleware only** | [`compose-dev.yaml`](./compose-dev.yaml) | External / deployed Keycloak (e.g. `https://sso.koala.primbs.dev/realms/koala`) | Koala client dev, ICT exchange against a real realm |
+
+### 2.1. Full stack (`docker-compose.yaml`)
+
+The composition includes:
 
 - Reverse Proxy: [Traefik Proxy](https://traefik.io/traefik/)
 - OpenID Provider: [Keycloak](https://www.keycloak.org/)
@@ -59,8 +81,11 @@ The provided [Docker composition](./docker-compose.yaml) contains an example for
 
 First, copy the file [`example.env`](./example.env`) to `.env` and adjust its [configuration](#configuration) parameters:
 ```bash
-copy example.env .env
-nano .env
+# Local test stack (internal CA, op.localhost):
+cp example-test.env .env
+
+# Or production-style stack:
+# cp example-prod.env .env
 ```
 
 Then, generate your secret files:
@@ -77,21 +102,39 @@ If you run the service locally, you should import the generated root certificate
 Then, use the following command to run the composition in the required profile:
 ```bash
 # Start the composition in detached mode (-d):
-docker compose --profile "test" up -d
+docker compose --profile test up -d   # local test
+docker compose --profile dev up -d    # local dev (builds middleware from source)
+docker compose --profile prod up -d   # production-style
 ```
-
-Available profiles are:
-- `prod`: Public production mode
-- `test`: Local test mode
-- `dev`: Local development mode
 
 To stop the composition, use the following command:
 ```bash
 # Stop the composition:
-docker compose --profile "test" down
+docker compose --profile test down
 ```
 
-See step-by-step guide [here](./docs-dev/setup.md).
+See the step-by-step guide for the full stack [here](./docs-dev/setup.md).
+
+### 2.2. Middleware only (`compose-dev.yaml`)
+
+Use this when Keycloak already runs elsewhere and you only need the OIDC^2 middleware on your machine (e.g. Koala client with `LOCAL_OIDC2_ICT_ENDPOINT=http://localhost:8082`).
+
+1. Copy [`example-dev.env`](./example-dev.env) to `.env` and set `ISSUER`, the three endpoint URLs, `KEY_ID`, `INTROSPECTION_CREDENTIALS`, and `ALLOWED_ORIGINS` for your realm.
+2. Start the middleware:
+
+```bash
+docker compose -f compose-dev.yaml up --build -d oidc2middleware
+```
+
+The service listens on **host port 8082** (`8082:8080`). POST token requests to `http://localhost:8082/`.
+
+The optional `app` service in the same file is a [Docker Dev Environment](https://docs.docker.com/dev/) shell (`dev.Dockerfile`); start it only if you need that IDE container:
+
+```bash
+docker compose -f compose-dev.yaml up -d app
+```
+
+See [docs-dev/setup.md](./docs-dev/setup.md#middleware-only-external-keycloak) for details.
 
 ## 3. Configuration
 Apply the following configuration options in your `.env` file.
@@ -241,6 +284,37 @@ HOSTS=127.0.0.1,::1
 ```
 
 Default value is `0.0.0.0` (all IPv4 hosts).
+
+#### 3.4.3. Introspection credentials
+HTTP `Authorization` header value for the Token Introspection request (e.g. Keycloak confidential client).
+
+Example:
+
+```bash
+INTROSPECTION_CREDENTIALS="Basic <base64(client_id:client_secret)>"
+```
+
+#### 3.4.4. Allowed origins (CORS)
+Comma-separated list of `Origin` header values allowed for browser clients.
+
+Example:
+
+```bash
+ALLOWED_ORIGINS=https://koala-local,https://koala.primbs.dev
+```
+
+Optional. Native clients usually do not send `Origin`; this matters mainly for web clients.
+
+#### 3.4.5. DPoP proof max age
+Maximum age in seconds for a DPoP proof `iat` claim when the subject token is DPoP-bound.
+
+Example:
+
+```bash
+DPOP_MAX_AGE=300
+```
+
+Default is `300`.
 
 ## 4. REST Documentation
 The [OpenAPI](https://swagger.io/specification/) documentation of the RESTful API is provided [here](./api/oidc2middleware.yaml).
