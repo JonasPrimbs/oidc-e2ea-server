@@ -23,7 +23,9 @@ RUN go build -a -ldflags '-linkmode external -extldflags "-static"' -o /go/src/o
 
 
 # Generate runtime container
-FROM scratch AS runtime
+FROM alpine:3.21 AS runtime
+
+RUN apk add --no-cache ca-certificates
 
 # Create working directory for binary
 WORKDIR /

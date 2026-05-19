@@ -87,37 +87,9 @@ func (c *DefaultAPIController) TokenRequest(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	grantTypeParam := r.FormValue("grant_type")
-
-	clientIdParam := r.FormValue("client_id")
-
-	codeParam := r.FormValue("code")
-
-	redirectUriParam := r.FormValue("redirect_uri")
-
-	clientSecretParam := r.FormValue("client_secret")
-
-	refreshTokenParam := r.FormValue("refresh_token")
-
-	scopeParam := r.FormValue("scope")
-
-	resourceParam := r.FormValue("resource")
-
-	audienceParam := r.FormValue("audience")
-
-	subjectTokenParam := r.FormValue("subject_token")
-
-	subjectTokenTypeParam := r.FormValue("subject_token_type")
-	
-	requestedTokenTypeParam := r.FormValue("requested_token_type")
-
-	actorTokenParam := r.FormValue("actor_token")
-
-	actorTokenTypeParam := r.FormValue("actor_token_type")
-
 	// Accept DPoP proof from the standard DPoP HTTP header
 	dpopParam := r.Header.Get("DPoP")
-
+	
 	authorizationParam := r.Header.Get("Authorization")
 
 	// Reconstruct the full request URL so the service can validate the DPoP htu claim
@@ -139,7 +111,26 @@ func (c *DefaultAPIController) TokenRequest(w http.ResponseWriter, r *http.Reque
 	}
 	requestURLParam := scheme + "://" + host + path
 
-	result, err := c.service.TokenRequest(r.Context(), grantTypeParam, clientIdParam, codeParam, redirectUriParam, clientSecretParam, refreshTokenParam, scopeParam, resourceParam, audienceParam, subjectTokenParam, subjectTokenTypeParam, requestedTokenTypeParam, actorTokenParam, actorTokenTypeParam, dpopParam, authorizationParam, requestURLParam)
+	result, err := c.service.TokenRequest(
+		r.Context(),
+		r.FormValue("grant_type"),
+		r.FormValue("client_id"),
+		r.FormValue("code"),
+		r.FormValue("redirect_uri"),
+		r.FormValue("client_secret"),
+		r.FormValue("refresh_token"),
+		r.FormValue("scope"),
+		r.FormValue("resource"),
+		r.FormValue("audience"),
+		r.FormValue("subject_token"),
+		r.FormValue("subject_token_type"),
+		r.FormValue("requested_token_type"),
+		r.FormValue("actor_token"),
+		r.FormValue("actor_token_type"),
+		dpopParam,
+		authorizationParam,
+		requestURLParam,
+	)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)

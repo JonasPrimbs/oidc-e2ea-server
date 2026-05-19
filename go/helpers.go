@@ -9,6 +9,7 @@
 package oidc2middleware
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -23,6 +24,12 @@ import (
 )
 
 const errMsgRequiredMissing = "required parameter is missing"
+
+// Decodes unpadded base64url
+func decodeBase64URLField(s string) ([]byte, error) {
+	s = strings.TrimRight(strings.TrimSpace(s), "=")
+	return base64.RawURLEncoding.DecodeString(s)
+}
 const errMsgMinValueConstraint = "provided parameter is not respecting minimum value constraint"
 const errMsgMaxValueConstraint = "provided parameter is not respecting maximum value constraint"
 
