@@ -263,6 +263,14 @@ TOKEN_PERIOD=300
 
 Default value is `300` (5 minutes).
 
+#### 3.3.3. Authorized-party context mapping (`ATH_CTX`)
+
+When set, the middleware adds a `ctx` claim to issued ICTs based on the subject token's authorized party (`azp` from token introspection, falling back to `client_id`).
+
+The value is a JSON object mapping `azp` strings to arrays of context strings.
+
+If `ATH_CTX` is configured and the subject token's authorized party has no entry, the ICT exchange is rejected.
+
 ### 3.4. Hosting Configuration
 
 #### 3.4.1. Port

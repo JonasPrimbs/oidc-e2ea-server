@@ -9,6 +9,7 @@
 package oidc2middleware
 
 import (
+	"encoding/json"
 	"errors"
 	"net"
 	"os"
@@ -28,6 +29,7 @@ type AppConfiguration struct {
 	TokenPeriod           int
 	Port                  int
 	Listeners             []string
+	AthCtx map[string][]string
 }
 
 var Configuration *AppConfiguration
@@ -86,6 +88,11 @@ func LoadConfigurationFromEnv() (*AppConfiguration, error) {
 		}
 	}
 
+	athCtx, err := parseAthCtx(os.Getenv("ATH_CTX"))
+	if err != nil {
+		return nil, err
+	}
+
 	return &AppConfiguration{
 		KeyFile:               keyFile,
 		KeyID:                 keyID,
@@ -97,7 +104,20 @@ func LoadConfigurationFromEnv() (*AppConfiguration, error) {
 		TokenPeriod:           tokenPeriod,
 		Port:                  port,
 		Listeners:             parseListeners(getEnvOrDefault("HOSTS", "0.0.0.0")),
+		AthCtx:                athCtx,
 	}, nil
+}
+
+func parseAthCtx(raw string) (map[string][]string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	var parsed map[string][]string
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		return nil, errors.New("invalid ATH_CTX: must be JSON object mapping azp to string arrays")
+	}
+	return parsed, nil
 }
 
 func getEnvOrDefault(key, defaultValue string) string {
