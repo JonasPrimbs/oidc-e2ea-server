@@ -106,9 +106,14 @@ func (s *DefaultAPIService) TokenRequest(ctx context.Context, grantType string, 
 	introspection.Cnf.Jkt = subjectJkt
 	userInfo := userInfoFromIntrospection(introspection)
 
+	ctxClaims, errResp := resolveCtxClaims(cfg, introspection)
+	if errResp != nil {
+		return *errResp, nil
+	}
+
 	issuedAt := time.Now().UTC()
 	expiresAt := issuedAt.Add(time.Duration(cfg.TokenPeriod) * time.Second)
-	ict, err := issueICT(cfg, clientId, introspection, userInfo, issuedAt, expiresAt)
+	ict, err := issueICT(cfg, clientId, introspection, userInfo, ctxClaims, issuedAt, expiresAt)
 	if err != nil {
 		return Response(http.StatusInternalServerError, ErrorStatus{
 			Error:            "server_error",
@@ -148,6 +153,7 @@ type introspectionResponse struct {
 	Active    bool                   `json:"active"`
 	Scope     string                 `json:"scope"`
 	ClientID  string                 `json:"client_id"`
+	Azp       string                 `json:"azp"`
 	Username  string                 `json:"username"`
 	TokenType string                 `json:"token_type"`
 	Sub       string                 `json:"sub"`
@@ -177,6 +183,7 @@ func (r *introspectionResponse) UnmarshalJSON(data []byte) error {
 	delete(extra, "active")
 	delete(extra, "scope")
 	delete(extra, "client_id")
+	delete(extra, "azp")
 	delete(extra, "username")
 	delete(extra, "token_type")
 	delete(extra, "sub")
@@ -454,6 +461,30 @@ func validateDPoPProof(raw string, expectedJKT string, expectedHTU string) (*dpo
 }
 
 // Maps introspection fields into ICT claim inputs
+func (r *introspectionResponse) authorizedParty() string {
+	if strings.TrimSpace(r.Azp) != "" {
+		return strings.TrimSpace(r.Azp)
+	}
+	return strings.TrimSpace(r.ClientID)
+}
+
+func resolveCtxClaims(cfg *AppConfiguration, introspection *introspectionResponse) ([]string, *ImplResponse) {
+	if len(cfg.AthCtx) == 0 {
+		return nil, nil
+	}
+	azp := introspection.authorizedParty()
+	if azp == "" {
+		resp := oauthError(http.StatusBadRequest, "invalid_token", "subject_token is missing authorized party (azp)")
+		return nil, &resp
+	}
+	ctxClaims, ok := cfg.AthCtx[azp]
+	if !ok {
+		resp := oauthError(http.StatusForbidden, "invalid_client", fmt.Sprintf("no ctx mapping configured for authorized party %q", azp))
+		return nil, &resp
+	}
+	return ctxClaims, nil
+}
+
 func userInfoFromIntrospection(introspection *introspectionResponse) map[string]interface{} {
 	userInfo := map[string]interface{}{}
 	if introspection.Sub != "" {
@@ -516,7 +547,7 @@ func fetchUserInfo(ctx context.Context, cfg *AppConfiguration, subjectToken stri
 	return payload, nil
 }
 
-func issueICT(cfg *AppConfiguration, clientID string, introspection *introspectionResponse, userInfo map[string]interface{}, issuedAt time.Time, expiresAt time.Time) (string, error) {
+func issueICT(cfg *AppConfiguration, clientID string, introspection *introspectionResponse, userInfo map[string]interface{}, ctxClaims []string, issuedAt time.Time, expiresAt time.Time) (string, error) {
 	signingKey, err := loadSigningKey(cfg)
 	if err != nil {
 		return "", err
@@ -537,6 +568,9 @@ func issueICT(cfg *AppConfiguration, clientID string, introspection *introspecti
 	}
 	if introspection.ClientID != "" {
 		claims["client_id"] = introspection.ClientID
+	}
+	if len(ctxClaims) > 0 {
+		claims["ctx"] = ctxClaims
 	}
 	for key, value := range userInfo {
 		if _, exists := claims[key]; !exists {
