@@ -11,6 +11,7 @@ package oidc2middleware
 import (
 	"context"
 	"net/http"
+	"net/url"
 )
 
 // DefaultAPIRouter defines the required methods for binding the api requests to a responses for the DefaultAPI
@@ -26,6 +27,6 @@ type DefaultAPIRouter interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type DefaultAPIServicer interface {
-	TokenRequest(context.Context, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string) (ImplResponse, error)
+	TokenRequest(context.Context, url.Values, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string, string) (ImplResponse, error)
 	TokenRequestPreflight(context.Context) (ImplResponse, error)
 }

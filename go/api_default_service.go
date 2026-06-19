@@ -44,27 +44,12 @@ func NewDefaultAPIService() *DefaultAPIService {
 }
 
 // TokenRequest - Request a token.
-func (s *DefaultAPIService) TokenRequest(ctx context.Context, grantType string, clientId string, code string, redirectUri string, clientSecret string, refreshToken string, scope string, resource string, audience string, subjectToken string, subjectTokenType string, requestedTokenType string, actorToken string, actorTokenType string, dpop string, authorizationHeader string, requestURL string) (ImplResponse, error) {
+func (s *DefaultAPIService) TokenRequest(ctx context.Context, postForm url.Values, grantType string, clientId string, code string, redirectUri string, clientSecret string, refreshToken string, scope string, resource string, audience string, subjectToken string, subjectTokenType string, requestedTokenType string, actorToken string, actorTokenType string, dpop string, authorizationHeader string, requestURL string) (ImplResponse, error) {
 	cfg := Configuration
 
 	if !isICTRequest(grantType, requestedTokenType) {
 		log.Printf("Received non-ICT token request with grant_type=%q requested_token_type=%q, forwarding to token endpoint", grantType, requestedTokenType)
-		return forwardTokenRequest(ctx, cfg, map[string]string{
-			"grant_type":         grantType,
-			"client_id":          clientId,
-			"code":               code,
-			"redirect_uri":       redirectUri,
-			"client_secret":      clientSecret,
-			"refresh_token":      refreshToken,
-			"scope":              scope,
-			"resource":           resource,
-			"audience":           audience,
-			"subject_token":      subjectToken,
-			"subject_token_type": subjectTokenType,
-			"requested_token_type": requestedTokenType,
-			"actor_token":        actorToken,
-			"actor_token_type":   actorTokenType,
-		}, dpop, authorizationHeader)
+		return forwardTokenRequest(ctx, cfg, postForm, dpop, authorizationHeader)
 	}
 
 	if subjectToken == "" {
@@ -257,12 +242,9 @@ func isICTRequest(grantType, requestedTokenType string) bool {
 	return requestedTokenType == "urn:ietf:params:oauth:token-type:ic_token"
 }
 
-func forwardTokenRequest(ctx context.Context, cfg *AppConfiguration, fields map[string]string, dpopProof string, authorizationHeader string) (ImplResponse, error) {
-	form := url.Values{}
-	for key, value := range fields {
-		if value != "" {
-			form.Set(key, value)
-		}
+func forwardTokenRequest(ctx context.Context, cfg *AppConfiguration, form url.Values, dpopProof string, authorizationHeader string) (ImplResponse, error) {
+	if form == nil {
+		form = url.Values{}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.TokenEndpoint, strings.NewReader(form.Encode()))

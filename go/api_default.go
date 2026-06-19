@@ -113,6 +113,7 @@ func (c *DefaultAPIController) TokenRequest(w http.ResponseWriter, r *http.Reque
 
 	result, err := c.service.TokenRequest(
 		r.Context(),
+		r.PostForm,
 		r.FormValue("grant_type"),
 		r.FormValue("client_id"),
 		r.FormValue("code"),
