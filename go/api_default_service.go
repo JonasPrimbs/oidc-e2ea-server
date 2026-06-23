@@ -231,15 +231,7 @@ type dpopProofClaims struct {
 }
 
 func isICTRequest(grantType, requestedTokenType string) bool {
-	if grantType != "urn:ietf:params:oauth:grant-type:token-exchange" {
-		return false
-	}
-	// When requested_token_type is absent, default to ICT for backward compatibility
-	// with clients that omit the field. When it is present it MUST be ic_token.
-	if requestedTokenType == "" {
-		return true
-	}
-	return requestedTokenType == "urn:ietf:params:oauth:token-type:ic_token"
+	return grantType == "urn:ietf:params:oauth:grant-type:token-exchange" && requestedTokenType == "urn:ietf:params:oauth:token-type:ic_token"
 }
 
 func forwardTokenRequest(ctx context.Context, cfg *AppConfiguration, form url.Values, dpopProof string, authorizationHeader string) (ImplResponse, error) {
